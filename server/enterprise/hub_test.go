@@ -17,6 +17,7 @@ package enterprise
 import (
 	"errors"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -261,8 +262,8 @@ func TestSendNoticeValidation(t *testing.T) {
 
 func lastSnapshot(s *fakeSession) *msg.EntSnapshot {
 	msgs := s.messages()
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if snap, ok := msgs[i].(*msg.EntSnapshot); ok {
+	for _, m := range slices.Backward(msgs) {
+		if snap, ok := m.(*msg.EntSnapshot); ok {
 			return snap
 		}
 	}

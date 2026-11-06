@@ -21,12 +21,12 @@ import (
 )
 
 // LogLine is one line of the frpc log.
-type LogLine = log.LogLine
+type LogLine = log.Line
 
 // LogBuffer keeps the latest log lines in memory.
-type LogBuffer = log.LogBuffer
+type LogBuffer = log.Buffer
 
 // NewLogBuffer creates a buffer that keeps up to capacity lines.
 func NewLogBuffer(capacity int, mirror io.Writer) *LogBuffer {
-	return log.NewLogBuffer(capacity, mirror)
+	return log.NewBuffer(capacity, mirror)
 }
