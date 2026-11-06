@@ -1,0 +1,40 @@
+# frps with the enterprise dashboard: auth codes, accounts with OIDC and TOTP,
+# audit logs. Data (auth codes, users, audit log) lives in /data.
+FROM node:22 AS web-builder
+
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+COPY web/shared/package.json ./shared/package.json
+COPY web/frpc/package.json ./frpc/package.json
+COPY web/frps/package.json ./frps/package.json
+RUN npm ci
+COPY web/shared/ ./shared/
+COPY web/frps/ ./frps/
+RUN npm run build --workspace frps
+
+FROM golang:1.26 AS building
+
+ARG VERSION=""
+WORKDIR /building
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+COPY --from=web-builder /web/frps/dist ./web/frps/dist
+RUN env CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -tags frps -o bin/frps ./cmd/frps
+
+FROM alpine:3
+
+RUN apk add --no-cache tzdata ca-certificates \
+    && addgroup -S frp && adduser -S -G frp -h /data frp \
+    && mkdir -p /data /etc/frp && chown frp:frp /data
+
+COPY --from=building /building/bin/frps /usr/bin/frps
+COPY deploy/docker/frps.toml /etc/frp/frps.toml
+
+USER frp
+WORKDIR /data
+VOLUME ["/data"]
+EXPOSE 7000 7500
+
+ENTRYPOINT ["/usr/bin/frps"]
+CMD ["-c", "/etc/frp/frps.toml"]

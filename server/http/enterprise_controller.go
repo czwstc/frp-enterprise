@@ -24,15 +24,22 @@ import (
 	"github.com/fatedier/frp/server/enterprise"
 )
 
+// AuditFunc records an action done through the dashboard.
+type AuditFunc func(r *http.Request, action, target, detail string)
+
 // EnterpriseController serves the enterprise auth code and notice APIs.
 type EnterpriseController struct {
-	hub *enterprise.Hub
+	hub   *enterprise.Hub
+	audit AuditFunc
 }
 
 // NewEnterpriseController creates a controller. hub may be nil when the
-// enterprise feature is disabled.
-func NewEnterpriseController(hub *enterprise.Hub) *EnterpriseController {
-	return &EnterpriseController{hub: hub}
+// enterprise feature is disabled, and audit nil when nothing is recorded.
+func NewEnterpriseController(hub *enterprise.Hub, audit AuditFunc) *EnterpriseController {
+	if audit == nil {
+		audit = func(*http.Request, string, string, string) {}
+	}
+	return &EnterpriseController{hub: hub, audit: audit}
 }
 
 // EnterpriseStatus tells the dashboard whether the feature is enabled.
@@ -90,6 +97,7 @@ func (c *EnterpriseController) APIGenerateCode(ctx *httppkg.Context) (any, error
 	if err != nil {
 		return nil, err
 	}
+	c.audit(ctx.Req, "code.generate", code.Code, code.Note)
 	return code, nil
 }
 
@@ -124,6 +132,7 @@ func (c *EnterpriseController) APICodeAction(ctx *httppkg.Context) (any, error) 
 	if err != nil {
 		return nil, entError(err)
 	}
+	c.audit(ctx.Req, "code."+ctx.Param("action"), res.Code, res.Hostname)
 	return res, nil
 }
 
@@ -135,6 +144,7 @@ func (c *EnterpriseController) APIDeleteCode(ctx *httppkg.Context) (any, error) 
 	if err := c.hub.Delete(ctx.Param("code")); err != nil {
 		return nil, entError(err)
 	}
+	c.audit(ctx.Req, "code.delete", ctx.Param("code"), "")
 	return map[string]string{"code": ctx.Param("code")}, nil
 }
 
@@ -166,6 +176,11 @@ func (c *EnterpriseController) APISendNotice(ctx *httppkg.Context) (any, error) 
 	if err != nil {
 		return nil, entError(err)
 	}
+	target := n.Target
+	if target == "" {
+		target = "all"
+	}
+	c.audit(ctx.Req, "notice.send", target, n.Title)
 	return n, nil
 }
 

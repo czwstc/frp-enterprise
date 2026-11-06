@@ -55,6 +55,8 @@ import (
 	"github.com/fatedier/frp/pkg/util/version"
 	"github.com/fatedier/frp/pkg/util/vhost"
 	"github.com/fatedier/frp/pkg/util/xlog"
+	"github.com/fatedier/frp/server/adminauth"
+	"github.com/fatedier/frp/server/audit"
 	"github.com/fatedier/frp/server/controller"
 	"github.com/fatedier/frp/server/enterprise"
 	"github.com/fatedier/frp/server/group"
@@ -116,6 +118,9 @@ type Service struct {
 
 	// Enterprise auth code login, nil when disabled.
 	entHub *enterprise.Hub
+	// Dashboard accounts and the audit log, nil when disabled.
+	adminAuth *adminauth.Service
+	auditLog  *audit.Logger
 
 	// Manage all plugins
 	pluginManager *plugin.Manager
@@ -198,8 +203,20 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 		log.Infof("tcpmux httpconnect multiplexer listen on %s, passthrough: %v", address, cfg.TCPMuxPassthrough)
 	}
 
+	if cfg.Enterprise.Admin.Enabled {
+		svr.auditLog, err = audit.Open(cfg.Enterprise.Admin.AuditLogPath)
+		if err != nil {
+			return nil, fmt.Errorf("open audit log error: %v", err)
+		}
+		svr.adminAuth, err = adminauth.New(cfg.Enterprise.Admin, svr.auditLog)
+		if err != nil {
+			return nil, fmt.Errorf("create dashboard accounts error: %v", err)
+		}
+		log.Infof("dashboard accounts enabled, local user [%s], OIDC [%v]", cfg.Enterprise.Admin.LocalUser.Username, cfg.Enterprise.Admin.OIDC.Issuer)
+	}
 	if cfg.Enterprise.Enabled {
 		svr.entHub, err = enterprise.NewHub(enterprise.Options{
+			Audit:      svr.recordAudit,
 			StorePath:  cfg.Enterprise.StorePath,
 			AllowPorts: types.PortsRangeSlice(cfg.AllowPorts).String(),
 			ListPorts:  svr.listEnterprisePorts,
@@ -504,6 +521,9 @@ func (svr *Service) Close() error {
 func (svr *Service) closeResources() {
 	if svr.entHub != nil {
 		svr.entHub.Close()
+	}
+	if svr.auditLog != nil {
+		_ = svr.auditLog.Close()
 	}
 	if svr.kcpListener != nil {
 		svr.kcpListener.Close()
@@ -1062,4 +1082,9 @@ func (svr *Service) listEnterprisePorts() []enterprise.PortUse {
 		})
 	}
 	return out
+}
+
+// recordAudit records an event frps did on its own.
+func (svr *Service) recordAudit(action, target, detail, ip string, ok bool) {
+	svr.auditLog.Record(audit.Entry{Action: action, Target: target, Detail: detail, IP: ip, Success: ok})
 }

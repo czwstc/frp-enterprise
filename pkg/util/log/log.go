@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"time"
 
 	"github.com/fatedier/golib/log"
 )
@@ -40,15 +41,26 @@ func init() {
 	)
 }
 
+// memory, when set, receives a copy of every log line, for the dashboard.
+var memory *LogBuffer
+
+// EnableMemory keeps the latest capacity log lines in memory from the next
+// InitLogger on, and returns the buffer.
+func EnableMemory(capacity int) *LogBuffer {
+	memory = NewLogBuffer(capacity, nil)
+	return memory
+}
+
+// Memory returns the in-memory log buffer, or nil when it is not enabled.
+func Memory() *LogBuffer { return memory }
+
 func InitLogger(logPath string, levelStr string, maxDays int, disableLogColor bool) {
-	options := []log.Option{}
+	var out io.Writer = log.DefaultWriter
 	if logPath == "console" {
 		if !disableLogColor {
-			options = append(options,
-				log.WithOutput(log.NewConsoleWriter(log.ConsoleConfig{
-					Colorful: true,
-				}, os.Stdout)),
-			)
+			out = log.NewConsoleWriter(log.ConsoleConfig{
+				Colorful: true,
+			}, os.Stdout)
 		}
 	} else {
 		writer := log.NewRotateFileWriter(log.RotateFileConfig{
@@ -57,15 +69,41 @@ func InitLogger(logPath string, levelStr string, maxDays int, disableLogColor bo
 			MaxDays:  maxDays,
 		})
 		writer.Init()
-		options = append(options, log.WithOutput(writer))
+		out = writer
+	}
+	if memory != nil {
+		out = &teeWriter{outs: []io.Writer{out, memory}}
 	}
 
 	level, err := log.ParseLevel(levelStr)
 	if err != nil {
 		level = log.InfoLevel
 	}
-	options = append(options, log.WithLevel(level))
-	Logger = Logger.WithOptions(options...)
+	Logger = Logger.WithOptions(log.WithOutput(out), log.WithLevel(level))
+}
+
+// teeWriter writes each line to several outputs, passing the level to those
+// that take it.
+type teeWriter struct {
+	outs []io.Writer
+}
+
+func (t *teeWriter) Write(p []byte) (int, error) {
+	for _, o := range t.outs {
+		_, _ = o.Write(p)
+	}
+	return len(p), nil
+}
+
+func (t *teeWriter) WriteLog(p []byte, level log.Level, when time.Time) (int, error) {
+	for _, o := range t.outs {
+		if lw, ok := o.(log.Writer); ok {
+			_, _ = lw.WriteLog(p, level, when)
+		} else {
+			_, _ = o.Write(p)
+		}
+	}
+	return len(p), nil
 }
 
 // Level is a log level.

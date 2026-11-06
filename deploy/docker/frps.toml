@@ -1,0 +1,32 @@
+# frps for Docker. Every value marked {{ .Envs.X }} comes from the container
+# environment (see .env.example); frps refuses to start when a secret is unset.
+bindPort = 7000
+auth.token = "{{ .Envs.FRPS_TOKEN }}"
+# Ports clients may map; keep it in step with the ports published by compose.
+allowPorts = [{ start = 6000, end = 6100 }]
+detailedErrorsToClient = false
+
+log.to = "console"
+log.level = "info"
+
+webServer.addr = "0.0.0.0"
+webServer.port = 7500
+
+# Per-device auth codes approved in the dashboard.
+enterprise.enabled = true
+enterprise.storePath = "/data/frps_enterprise.json"
+
+# Dashboard accounts: one local user with TOTP + recovery keys, the rest
+# through OIDC, matched by user name and approved by another administrator.
+enterprise.admin.enabled = true
+enterprise.admin.storePath = "/data/frps_admin.json"
+enterprise.admin.auditLogPath = "/data/frps_audit.log"
+enterprise.admin.localUser.username = "{{ .Envs.FRPS_ADMIN_USER }}"
+enterprise.admin.localUser.password = "{{ .Envs.FRPS_ADMIN_PASSWORD }}"
+
+enterprise.admin.oidc.issuer = "{{ .Envs.FRPS_OIDC_ISSUER }}"
+enterprise.admin.oidc.clientID = "{{ .Envs.FRPS_OIDC_CLIENT_ID }}"
+enterprise.admin.oidc.clientSecret = "{{ .Envs.FRPS_OIDC_CLIENT_SECRET }}"
+enterprise.admin.oidc.redirectURL = "{{ .Envs.FRPS_OIDC_REDIRECT_URL }}"
+enterprise.admin.oidc.scopes = ["openid", "email", "groups"]
+enterprise.admin.oidc.displayName = "{{ .Envs.FRPS_OIDC_NAME }}"

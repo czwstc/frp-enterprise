@@ -109,7 +109,66 @@ type ServerEnterpriseConfig struct {
 	// StorePath is the JSON file holding auth codes and notices. By default,
 	// this value is "./frps_enterprise.json".
 	StorePath string `json:"storePath,omitempty"`
+	// Admin replaces the dashboard's basic auth with user accounts: one local
+	// user protected by TOTP, and OIDC users approved by an administrator.
+	Admin AdminAuthConfig `json:"admin,omitempty"`
 }
+
+// AdminAuthConfig configures the dashboard's user accounts.
+type AdminAuthConfig struct {
+	// Enabled turns on dashboard accounts. It requires webServer.port.
+	Enabled bool `json:"enabled,omitempty"`
+	// StorePath is the JSON file holding users and the local user's second
+	// factor. By default, this value is "./frps_admin.json".
+	StorePath string `json:"storePath,omitempty"`
+	// AuditLogPath is the JSON-lines audit log. By default, this value is
+	// "./frps_audit.log".
+	AuditLogPath string `json:"auditLogPath,omitempty"`
+	// SessionTTLHours is how long a dashboard session lasts. By default, 12.
+	SessionTTLHours int `json:"sessionTTLHours,omitempty"`
+	// TOTPIssuer is the name authenticator apps show. By default,
+	// "FRP Enterprise".
+	TOTPIssuer string `json:"totpIssuer,omitempty"`
+	// LocalUser is the single local account.
+	LocalUser AdminLocalUserConfig `json:"localUser,omitempty"`
+	// OIDC lets the users of an OpenID Connect provider sign in.
+	OIDC AdminOIDCConfig `json:"oidc,omitempty"`
+}
+
+// AdminLocalUserConfig is the single local dashboard account.
+type AdminLocalUserConfig struct {
+	// Username of the local account. By default, "admin".
+	Username string `json:"username,omitempty"`
+	// Password in clear text, or PasswordHash as a bcrypt hash.
+	Password     string `json:"password,omitempty"`
+	PasswordHash string `json:"passwordHash,omitempty"`
+}
+
+// AdminOIDCConfig configures sign-in with an OpenID Connect provider.
+type AdminOIDCConfig struct {
+	// Issuer is the provider URL; its /.well-known/openid-configuration is
+	// read at startup. OIDC sign-in is off when it is empty.
+	Issuer       string `json:"issuer,omitempty"`
+	ClientID     string `json:"clientID,omitempty"`
+	ClientSecret string `json:"clientSecret,omitempty"`
+	// RedirectURL is the callback URL registered at the provider. frps
+	// serves the callback at its path.
+	RedirectURL string `json:"redirectURL,omitempty"`
+	// Scopes requested. By default, ["openid", "email"].
+	Scopes []string `json:"scopes,omitempty"`
+	// UsernameClaim names the claim matched against user names. By default,
+	// the first of "preferred_username", "username" and "email" present.
+	UsernameClaim string `json:"usernameClaim,omitempty"`
+	// DisplayName labels the sign-in button. By default, "SSO".
+	DisplayName string `json:"displayName,omitempty"`
+	// TrustedCaFile adds a CA to verify the provider's certificate.
+	TrustedCaFile string `json:"trustedCaFile,omitempty"`
+	// InsecureSkipVerify disables verification of the provider's certificate.
+	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+}
+
+// OIDCEnabled reports whether OIDC sign-in is configured.
+func (c *AdminOIDCConfig) OIDCEnabled() bool { return c.Issuer != "" }
 
 func (c *ServerConfig) Complete() error {
 	if err := c.Auth.Complete(); err != nil {
@@ -122,6 +181,19 @@ func (c *ServerConfig) Complete() error {
 	c.SSHTunnelGateway.Complete()
 	if c.Enterprise.Enabled {
 		c.Enterprise.StorePath = util.EmptyOr(c.Enterprise.StorePath, "./frps_enterprise.json")
+	}
+	if a := &c.Enterprise.Admin; a.Enabled {
+		a.StorePath = util.EmptyOr(a.StorePath, "./frps_admin.json")
+		a.AuditLogPath = util.EmptyOr(a.AuditLogPath, "./frps_audit.log")
+		a.SessionTTLHours = util.EmptyOr(a.SessionTTLHours, 12)
+		a.TOTPIssuer = util.EmptyOr(a.TOTPIssuer, "FRP Enterprise")
+		a.LocalUser.Username = util.EmptyOr(a.LocalUser.Username, "admin")
+		if a.OIDC.OIDCEnabled() {
+			if len(a.OIDC.Scopes) == 0 {
+				a.OIDC.Scopes = []string{"openid", "email"}
+			}
+			a.OIDC.DisplayName = util.EmptyOr(a.OIDC.DisplayName, "SSO")
+		}
 	}
 
 	c.BindAddr = util.EmptyOr(c.BindAddr, "0.0.0.0")

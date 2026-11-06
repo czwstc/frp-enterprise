@@ -1,0 +1,20 @@
+services:
+  frps:
+    image: ${FRPS_IMAGE:-ghcr.io/czwstc/frps-enterprise:latest}
+    container_name: frps
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "7000:7000"          # frpc control connections
+      - "7500:7500"          # dashboard; put it behind HTTPS in production
+      - "6000-6100:6000-6100" # ports clients may map (allowPorts)
+      - "6000-6100:6000-6100/udp"
+    volumes:
+      - frps-data:/data
+      # To change the configuration, mount your own file:
+      # - ./frps.toml:/etc/frp/frps.toml:ro
+
+volumes:
+  frps-data:

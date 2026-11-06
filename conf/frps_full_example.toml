@@ -176,6 +176,24 @@ natholeAnalysisDataReserveHours = 168
 # enterprise.enabled = true
 # enterprise.storePath = "./frps_enterprise.json"
 
+# Dashboard accounts replace webServer.user/password: one local user who sets up
+# TOTP (and gets recovery keys) at the first login after deployment, and OIDC
+# users matched by user name. Unknown OIDC users wait for approval by another
+# administrator. Actions are written to the audit log.
+# enterprise.admin.enabled = true
+# enterprise.admin.storePath = "./frps_admin.json"
+# enterprise.admin.auditLogPath = "./frps_audit.log"
+# enterprise.admin.sessionTTLHours = 12
+# enterprise.admin.localUser.username = "admin"
+# enterprise.admin.localUser.password = "{{ .Envs.FRPS_ADMIN_PASSWORD }}"
+# enterprise.admin.oidc.issuer = "https://nas.example.com:5001/webman/sso"
+# enterprise.admin.oidc.clientID = "your-client-id"
+# enterprise.admin.oidc.clientSecret = "{{ .Envs.FRPS_OIDC_CLIENT_SECRET }}"
+# enterprise.admin.oidc.redirectURL = "https://frp.example.com/relay"
+# enterprise.admin.oidc.scopes = ["openid", "email"]
+# enterprise.admin.oidc.usernameClaim = "username"
+# enterprise.admin.oidc.displayName = "SSO"
+
 [[httpPlugins]]
 name = "user-manager"
 addr = "127.0.0.1:9000"

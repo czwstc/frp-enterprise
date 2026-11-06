@@ -63,6 +63,8 @@ type Options struct {
 	SnapshotInterval time.Duration
 	// SnapshotDebounce delays broadcasts after a change, merging bursts.
 	SnapshotDebounce time.Duration
+	// Audit records client events. It may be nil.
+	Audit func(action, target, detail, ip string, ok bool)
 }
 
 type sessionEntry struct {
@@ -82,6 +84,28 @@ type Hub struct {
 	dirtyCh   chan struct{}
 	closeCh   chan struct{}
 	closeOnce sync.Once
+
+	auditMu   sync.Mutex
+	auditSeen map[string]time.Time
+}
+
+// auditRepeatWindow keeps a client that retries a refused login from
+// filling the audit log.
+const auditRepeatWindow = 10 * time.Minute
+
+func (h *Hub) audit(action, target, detail, ip string, ok bool) {
+	if h.opts.Audit == nil {
+		return
+	}
+	key := action + "|" + target + "|" + detail
+	h.auditMu.Lock()
+	if last, seen := h.auditSeen[key]; seen && time.Since(last) < auditRepeatWindow {
+		h.auditMu.Unlock()
+		return
+	}
+	h.auditSeen[key] = time.Now()
+	h.auditMu.Unlock()
+	h.opts.Audit(action, target, detail, ip, ok)
 }
 
 // NewHub opens the store and starts the broadcast loop.
@@ -97,11 +121,12 @@ func NewHub(opts Options) (*Hub, error) {
 		opts.ListPorts = func() []PortUse { return nil }
 	}
 	h := &Hub{
-		store:    store,
-		opts:     opts,
-		sessions: map[Session]*sessionEntry{},
-		dirtyCh:  make(chan struct{}, 1),
-		closeCh:  make(chan struct{}),
+		store:     store,
+		opts:      opts,
+		sessions:  map[Session]*sessionEntry{},
+		dirtyCh:   make(chan struct{}, 1),
+		closeCh:   make(chan struct{}),
+		auditSeen: map[string]time.Time{},
 	}
 	go h.loop()
 	return h, nil
@@ -125,6 +150,17 @@ func hostOf(addr string) string {
 // CheckLogin decides whether a login may proceed. It returns a
 // *enterprise.LoginError when the client is refused.
 func (h *Hub) CheckLogin(login *msg.Login, remoteAddr string) error {
+	err := h.checkLogin(login, remoteAddr)
+	var le *enterprise.LoginError
+	if errors.As(err, &le) {
+		code := enterprise.NormalizeAuthCode(login.Metas[msg.EntMetaAuthCode])
+		detail := fmt.Sprintf("%s: device %s, host %s", le.Kind, login.ClientID, login.Hostname)
+		h.audit("client.login", code, detail, hostOf(remoteAddr), false)
+	}
+	return err
+}
+
+func (h *Hub) checkLogin(login *msg.Login, remoteAddr string) error {
 	code := enterprise.NormalizeAuthCode(login.Metas[msg.EntMetaAuthCode])
 	if code == "" {
 		return &enterprise.LoginError{Kind: enterprise.LoginErrRequired, Msg: "an auth code is required"}
@@ -222,6 +258,7 @@ func (h *Hub) OnControlActive(s Session) {
 	h.mu.Lock()
 	h.sessions[s] = e
 	h.mu.Unlock()
+	h.auditEvent("client.connect", e.code, fmt.Sprintf("device %s, host %s, run id %s", login.ClientID, login.Hostname, s.RunID()), hostOf(s.RemoteAddr()))
 
 	go func() {
 		select {
@@ -232,6 +269,7 @@ func (h *Hub) OnControlActive(s Session) {
 		h.mu.Lock()
 		delete(h.sessions, s)
 		h.mu.Unlock()
+		h.auditEvent("client.disconnect", e.code, "run id "+s.RunID(), hostOf(s.RemoteAddr()))
 		h.MarkDirty()
 	}()
 
@@ -528,4 +566,11 @@ type PortView struct {
 
 func toNoticeMsg(n Notice) *msg.EntNotice {
 	return &msg.EntNotice{ID: n.ID, Level: n.Level, Title: n.Title, Content: n.Content, Time: n.Time.Unix()}
+}
+
+// auditEvent records an event that does not repeat, such as a connect.
+func (h *Hub) auditEvent(action, target, detail, ip string) {
+	if h.opts.Audit != nil {
+		h.opts.Audit(action, target, detail, ip, true)
+	}
 }

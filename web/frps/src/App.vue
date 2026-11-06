@@ -1,5 +1,8 @@
 <template>
-  <div id="app">
+  <div v-if="route.meta.public" id="app" class="bare">
+    <router-view></router-view>
+  </div>
+  <div v-else id="app">
     <header class="header">
       <div class="header-content">
         <div class="brand-section">
@@ -20,6 +23,19 @@
         </div>
 
         <div class="header-controls">
+          <el-dropdown v-if="session" trigger="click" @command="onUserCommand">
+            <span class="user-chip">
+              {{ session.username }}
+              <span class="user-source">{{
+                session.source === 'local' ? '本地' : 'SSO'
+              }}</span>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
           <a
             class="github-link"
             href="https://github.com/fatedier/frp"
@@ -99,6 +115,27 @@
           >
             通知
           </router-link>
+          <template v-if="authConfig?.enabled">
+            <router-link
+              to="/users"
+              class="sidebar-link"
+              :class="{ active: route.path.startsWith('/users') }"
+              @click="closeSidebar"
+            >
+              用户
+              <span v-if="pendingUsers > 0" class="sidebar-badge">{{
+                pendingUsers
+              }}</span>
+            </router-link>
+            <router-link
+              to="/logs"
+              class="sidebar-link"
+              :class="{ active: route.path.startsWith('/logs') }"
+              @click="closeSidebar"
+            >
+              日志
+            </router-link>
+          </template>
         </nav>
       </aside>
 
@@ -111,15 +148,40 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useDark } from '@vueuse/core'
 import { Moon, Sunny } from '@element-plus/icons-vue'
 import GitHubIcon from './assets/icons/github.svg?component'
 import LogoIcon from './assets/icons/logo.svg?component'
 import { useResponsive } from './composables/useResponsive'
 import { getEnterpriseStatus } from './api/enterprise'
+import { listUsers, logout } from './api/auth'
+import { setUnauthorizedHandler } from './api/http'
+import { useAuth } from './composables/useAuth'
 
 const route = useRoute()
+const router = useRouter()
+const { config: authConfig, session } = useAuth()
+
+// A request answered 401 means the session has ended: go to the login page.
+setUnauthorizedHandler(() => {
+  if (authConfig.value?.enabled && !route.meta.public) {
+    session.value = null
+    router.replace('/login')
+  }
+})
+
+const onUserCommand = async (cmd: string) => {
+  if (cmd === 'logout') {
+    try {
+      await logout()
+    } catch {
+      // The session is gone either way.
+    }
+    session.value = null
+    router.replace('/login')
+  }
+}
 const isDark = useDark()
 const { isMobile } = useResponsive()
 
@@ -128,12 +190,24 @@ const sidebarOpen = ref(false)
 // Auth codes waiting for approval, shown beside the sidebar link.
 const pendingCount = ref(0)
 let pendingTimer: number | null = null
+const pendingUsers = ref(0)
 const fetchPending = async () => {
+  if (route.meta.public) return
   try {
     const status = await getEnterpriseStatus()
     pendingCount.value = status.enabled ? status.pending : 0
   } catch {
     pendingCount.value = 0
+  }
+  if (authConfig.value?.enabled) {
+    try {
+      const users = await listUsers()
+      pendingUsers.value = users.users.filter(
+        (u) => u.status === 'pending',
+      ).length
+    } catch {
+      pendingUsers.value = 0
+    }
   }
 }
 onMounted(() => {
@@ -372,6 +446,23 @@ html.dark .theme-switch {
   color: var(--text-primary);
   background: var(--hover-bg);
   font-weight: 500;
+}
+
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--hover-bg);
+  cursor: pointer;
+}
+
+.user-source {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .sidebar-badge {
