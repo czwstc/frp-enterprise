@@ -5,6 +5,11 @@ clientID = "your_client_id"
 # your proxy name will be changed to {user}.{proxy}
 user = "your_name"
 
+# Auth code for frps with enterprise login enabled. The code is bound to clientID
+# on first login. Set loginFailExit = false to keep retrying while the code waits
+# for approval.
+# enterprise.authCode = "XXXX-XXXX-XXXX-XXXX"
+
 # A literal address or host name for IPv6 must be enclosed
 # in square brackets, as in "[::1]:80", "[ipv6-host]:http" or "[ipv6-host%zone]:80"
 # For single serverAddr field, no need square brackets, like serverAddr = "::".

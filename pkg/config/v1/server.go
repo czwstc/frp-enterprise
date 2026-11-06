@@ -97,6 +97,18 @@ type ServerConfig struct {
 	AllowPorts []types.PortsRange `json:"allowPorts,omitempty"`
 
 	HTTPPlugins []HTTPPluginOptions `json:"httpPlugins,omitempty"`
+
+	// Enterprise enables per-device auth code login and approval.
+	Enterprise ServerEnterpriseConfig `json:"enterprise,omitempty"`
+}
+
+// ServerEnterpriseConfig configures the enterprise login of frps.
+type ServerEnterpriseConfig struct {
+	// Enabled requires every client to log in with an approved auth code.
+	Enabled bool `json:"enabled,omitempty"`
+	// StorePath is the JSON file holding auth codes and notices. By default,
+	// this value is "./frps_enterprise.json".
+	StorePath string `json:"storePath,omitempty"`
 }
 
 func (c *ServerConfig) Complete() error {
@@ -108,6 +120,9 @@ func (c *ServerConfig) Complete() error {
 	c.WebServer.Complete()
 	c.MetricsServer.Complete()
 	c.SSHTunnelGateway.Complete()
+	if c.Enterprise.Enabled {
+		c.Enterprise.StorePath = util.EmptyOr(c.Enterprise.StorePath, "./frps_enterprise.json")
+	}
 
 	c.BindAddr = util.EmptyOr(c.BindAddr, "0.0.0.0")
 	c.BindPort = util.EmptyOr(c.BindPort, 7000)

@@ -5,7 +5,7 @@ NOWEB_TAG = $(shell [ ! -d web/frps/dist ] || [ ! -d web/frpc/dist ] && echo ',n
 FRP_COMPAT_BASELINE_COUNT ?= 8
 FRP_COMPAT_FLOOR_VERSION ?= 0.61.0
 
-.PHONY: web web-ci frps-web frpc-web frps frpc e2e-compatibility-smoke e2e-compatibility e2e-compatibility-floor
+.PHONY: web web-ci frps-web frpc-web frps frpc e2e-compatibility-smoke e2e-compatibility e2e-compatibility-floor gui gui-dev gui-test gui-cross
 
 all: env fmt web build
 
@@ -83,6 +83,22 @@ e2e-compatibility-last-frps:
 
 alltest: vet gotest e2e
 	
+# Desktop client (desktop/frpc-gui, its own Go module, needs Go >= 1.27.3).
+GUI_DIR := desktop/frpc-gui
+GUI_PLATFORMS ?= darwin/universal,windows/amd64,linux/amd64
+
+gui:
+	cd $(GUI_DIR) && go tool mygo build
+
+gui-dev:
+	cd $(GUI_DIR) && go tool mygo dev
+
+gui-test:
+	cd $(GUI_DIR) && CGO_ENABLED=0 go test ./... && go tool mygo vet .
+
+gui-cross:
+	cd $(GUI_DIR) && go tool mygo build -platform $(GUI_PLATFORMS)
+
 clean:
 	rm -f ./bin/frpc
 	rm -f ./bin/frps

@@ -58,9 +58,9 @@ async function requestV2<T>(
   }
 
   const response = await fetch(url, { ...defaultOptions, ...options })
-  const envelope = (await response.json().catch(() => null)) as
-    | V2Envelope<T>
-    | null
+  const envelope = (await response
+    .json()
+    .catch(() => null)) as V2Envelope<T> | null
 
   if (!response.ok) {
     throw new HTTPError(
@@ -121,4 +121,6 @@ export const http = {
     }),
   delete: <T>(url: string, options?: RequestInit) =>
     request<T>(url, { ...options, method: 'DELETE' }),
+  deleteV2: <T>(url: string, options?: RequestInit) =>
+    requestV2<T>(url, { ...options, method: 'DELETE' }),
 }

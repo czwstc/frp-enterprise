@@ -16,6 +16,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -38,7 +39,9 @@ import (
 	"github.com/fatedier/frp/pkg/util/wait"
 	"github.com/fatedier/frp/pkg/util/xlog"
 	"github.com/fatedier/frp/server/controller"
+	"github.com/fatedier/frp/server/enterprise"
 	"github.com/fatedier/frp/server/metrics"
+	"github.com/fatedier/frp/server/ports"
 	"github.com/fatedier/frp/server/proxy"
 	"github.com/fatedier/frp/server/registry"
 )
@@ -374,6 +377,8 @@ type SessionContext struct {
 	LoginMsg *msg.Login
 	// server configuration
 	ServerCfg *v1.ServerConfig
+	// enterprise hub, nil when enterprise login is disabled
+	EntHub *enterprise.Hub
 	// negotiated wire protocol for this client session
 	WireProtocol   string
 	UDPPacketCodec string
@@ -479,6 +484,35 @@ func NewControl(ctx context.Context, sessionCtx *SessionContext) (*Control, erro
 
 func (ctl *Control) RunID() string {
 	return ctl.runID
+}
+
+// LoginMsg returns the login message of the client.
+func (ctl *Control) LoginMsg() *msg.Login {
+	return ctl.sessionCtx.LoginMsg
+}
+
+// RemoteAddr returns the address of the client control connection.
+func (ctl *Control) RemoteAddr() string {
+	if ctl.sessionCtx.Conn == nil || ctl.sessionCtx.Conn.RemoteAddr() == nil {
+		return ""
+	}
+	return ctl.sessionCtx.Conn.RemoteAddr().String()
+}
+
+// SendMsg queues a message to the client.
+func (ctl *Control) SendMsg(m msg.Message) error {
+	return ctl.msgDispatcher.Send(m)
+}
+
+// Done is closed when the control has finished.
+func (ctl *Control) Done() <-chan struct{} {
+	return ctl.doneCh
+}
+
+func (ctl *Control) markEntDirty() {
+	if ctl.sessionCtx.EntHub != nil {
+		ctl.sessionCtx.EntHub.MarkDirty()
+	}
 }
 
 func (ctl *Control) ID() ControlID {
@@ -675,6 +709,7 @@ func (ctl *Control) loginUserInfo() plugin.UserInfo {
 func (ctl *Control) closeProxy(pxy proxy.Proxy) {
 	pxy.Close()
 	ctl.sessionCtx.PxyManager.Del(pxy.GetName())
+	ctl.markEntDirty()
 	ctl.serverMetrics.CloseProxy(pxy.GetName(), pxy.GetConfigurer().GetBaseConfig().Type)
 
 	notifyContent := &plugin.CloseProxyContent{
@@ -764,6 +799,10 @@ func (ctl *Control) handleNewProxy(m msg.Message) {
 		xl.Warnf("new proxy [%s] type [%s] error: %v", inMsg.ProxyName, inMsg.ProxyType, err)
 		resp.Error = util.GenerateResponseErrorString(fmt.Sprintf("new proxy [%s] error", inMsg.ProxyName),
 			err, lo.FromPtr(ctl.sessionCtx.ServerCfg.DetailedErrorsToClient))
+		if ctl.sessionCtx.EntHub != nil && errors.Is(err, ports.ErrPortAlreadyUsed) {
+			resp.Error = fmt.Sprintf("new proxy [%s] error: remote port %d is already used by another client",
+				inMsg.ProxyName, inMsg.RemotePort)
+		}
 	} else {
 		resp.RemoteAddr = remoteAddr
 		xl.Infof("new proxy [%s] type [%s] success", inMsg.ProxyName, inMsg.ProxyType)
@@ -899,6 +938,7 @@ func (ctl *Control) RegisterProxy(pxyMsg *msg.NewProxy) (remoteAddr string, err 
 	ctl.mu.Lock()
 	ctl.proxies[pxy.GetName()] = pxy
 	ctl.mu.Unlock()
+	ctl.markEntDirty()
 	return
 }
 

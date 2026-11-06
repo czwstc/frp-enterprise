@@ -36,8 +36,10 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/fatedier/frp/pkg/auth"
+	"github.com/fatedier/frp/pkg/config/types"
 	v1 "github.com/fatedier/frp/pkg/config/v1"
 	"github.com/fatedier/frp/pkg/config/v1/validation"
+	entpkg "github.com/fatedier/frp/pkg/enterprise"
 	modelmetrics "github.com/fatedier/frp/pkg/metrics"
 	"github.com/fatedier/frp/pkg/msg"
 	"github.com/fatedier/frp/pkg/nathole"
@@ -54,6 +56,7 @@ import (
 	"github.com/fatedier/frp/pkg/util/vhost"
 	"github.com/fatedier/frp/pkg/util/xlog"
 	"github.com/fatedier/frp/server/controller"
+	"github.com/fatedier/frp/server/enterprise"
 	"github.com/fatedier/frp/server/group"
 	"github.com/fatedier/frp/server/ports"
 	"github.com/fatedier/frp/server/proxy"
@@ -110,6 +113,9 @@ type Service struct {
 
 	// Manage all proxies
 	pxyManager *proxy.Manager
+
+	// Enterprise auth code login, nil when disabled.
+	entHub *enterprise.Hub
 
 	// Manage all plugins
 	pluginManager *plugin.Manager
@@ -190,6 +196,18 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 			return nil, fmt.Errorf("create vhost tcpMuxer error, %v", err)
 		}
 		log.Infof("tcpmux httpconnect multiplexer listen on %s, passthrough: %v", address, cfg.TCPMuxPassthrough)
+	}
+
+	if cfg.Enterprise.Enabled {
+		svr.entHub, err = enterprise.NewHub(enterprise.Options{
+			StorePath:  cfg.Enterprise.StorePath,
+			AllowPorts: types.PortsRangeSlice(cfg.AllowPorts).String(),
+			ListPorts:  svr.listEnterprisePorts,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("create enterprise hub error: %v", err)
+		}
+		log.Infof("enterprise auth code login enabled, store [%s]", cfg.Enterprise.StorePath)
 	}
 
 	// Init all plugins
@@ -484,6 +502,9 @@ func (svr *Service) Close() error {
 }
 
 func (svr *Service) closeResources() {
+	if svr.entHub != nil {
+		svr.entHub.Close()
+	}
 	if svr.kcpListener != nil {
 		svr.kcpListener.Close()
 	}
@@ -561,10 +582,16 @@ func (svr *Service) handleConnection(ctx context.Context, conn net.Conn, interna
 			if ctl != nil {
 				svr.ctlManager.Remove(ctl)
 			}
+			errStr := util.GenerateResponseErrorString("register control error", err, lo.FromPtr(svr.cfg.DetailedErrorsToClient))
+			if entErr := (*entpkg.LoginError)(nil); errors.As(err, &entErr) {
+				// Enterprise login refusals are always sent verbatim so the
+				// client can tell "waiting for approval" from "rejected".
+				errStr = entErr.Error()
+			}
 			if writeErr := writeWithDeadline(conn, connWriteTimeout, func() error {
 				return acceptedConn.conn.WriteMsg(&msg.LoginResp{
 					Version: version.Full(),
-					Error:   util.GenerateResponseErrorString("register control error", err, lo.FromPtr(svr.cfg.DetailedErrorsToClient)),
+					Error:   errStr,
 				})
 			}); writeErr != nil {
 				xl.Warnf("write login error response error: %v", writeErr)
@@ -589,6 +616,9 @@ func (svr *Service) handleConnection(ctx context.Context, conn net.Conn, interna
 			svr.ctlManager.Remove(ctl)
 			_ = ctl.Close()
 			return
+		}
+		if svr.entHub != nil && !internal {
+			svr.entHub.OnControlActive(ctl)
 		}
 	case *msg.NewWorkConn:
 		if err := svr.RegisterWorkConn(
@@ -893,6 +923,12 @@ func (svr *Service) RegisterControl(
 	if err := authVerifier.VerifyLogin(loginMsg); err != nil {
 		return nil, err
 	}
+	if svr.entHub != nil && !internal {
+		if err := svr.entHub.CheckLogin(loginMsg, ctlConn.RemoteAddr().String()); err != nil {
+			xl.Infof("enterprise login refused: %v", err)
+			return nil, err
+		}
+	}
 
 	ctl, err := NewControl(ctx, &SessionContext{
 		RC:             svr.rc,
@@ -904,6 +940,7 @@ func (svr *Service) RegisterControl(
 		Session:        session,
 		LoginMsg:       loginMsg,
 		ServerCfg:      svr.cfg,
+		EntHub:         svr.entHub,
 		WireProtocol:   wireProtocol,
 		UDPPacketCodec: udpPacketCodec,
 	})
@@ -997,4 +1034,32 @@ func (svr *Service) RegisterVisitorConn(visitorConn net.Conn, newMsg *msg.NewVis
 		return nil
 	}
 	return admit("", wireProtocol, "")
+}
+
+// listEnterprisePorts lists the tcp/udp ports held by proxies.
+func (svr *Service) listEnterprisePorts() []enterprise.PortUse {
+	pxys := svr.pxyManager.List()
+	out := make([]enterprise.PortUse, 0, len(pxys))
+	for _, pxy := range pxys {
+		var proto string
+		var port int
+		switch cfg := pxy.GetConfigurer().(type) {
+		case *v1.TCPProxyConfig:
+			proto, port = "tcp", cfg.RemotePort
+		case *v1.UDPProxyConfig:
+			proto, port = "udp", cfg.RemotePort
+		default:
+			continue
+		}
+		if port <= 0 {
+			continue
+		}
+		out = append(out, enterprise.PortUse{
+			Proto:     proto,
+			Port:      port,
+			RunID:     pxy.GetUserInfo().RunID,
+			ProxyName: pxy.GetName(),
+		})
+	}
+	return out
 }

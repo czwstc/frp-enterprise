@@ -47,6 +47,8 @@ type SessionContext struct {
 	Connector MessageConnector
 	// Virtual net controller
 	VnetController *vnet.Controller
+	// Enterprise data pushed by the server.
+	Ent *entState
 	// UDPPacketCodec is immutable for the lifetime of this negotiated session.
 	UDPPacketCodec string
 }
@@ -234,6 +236,10 @@ func (ctl *Control) registerMsgHandlers() {
 	ctl.msgDispatcher.RegisterHandler(&msg.NewProxyResp{}, ctl.handleNewProxyResp)
 	ctl.msgDispatcher.RegisterHandler(&msg.NatHoleResp{}, ctl.handleNatHoleResp)
 	ctl.msgDispatcher.RegisterHandler(&msg.Pong{}, ctl.handlePong)
+	if ent := ctl.sessionCtx.Ent; ent != nil {
+		ctl.msgDispatcher.RegisterHandler(&msg.EntSnapshot{}, ent.handleSnapshot)
+		ctl.msgDispatcher.RegisterHandler(&msg.EntNotice{}, ent.handleNotice)
+	}
 }
 
 // heartbeatWorker sends heartbeat to server and check heartbeat timeout.

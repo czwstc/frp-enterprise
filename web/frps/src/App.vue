@@ -80,6 +80,25 @@
           >
             Proxies
           </router-link>
+          <router-link
+            to="/auth-codes"
+            class="sidebar-link"
+            :class="{ active: route.path.startsWith('/auth-codes') }"
+            @click="closeSidebar"
+          >
+            鉴权码
+            <span v-if="pendingCount > 0" class="sidebar-badge">{{
+              pendingCount
+            }}</span>
+          </router-link>
+          <router-link
+            to="/notices"
+            class="sidebar-link"
+            :class="{ active: route.path.startsWith('/notices') }"
+            @click="closeSidebar"
+          >
+            通知
+          </router-link>
         </nav>
       </aside>
 
@@ -91,19 +110,39 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDark } from '@vueuse/core'
 import { Moon, Sunny } from '@element-plus/icons-vue'
 import GitHubIcon from './assets/icons/github.svg?component'
 import LogoIcon from './assets/icons/logo.svg?component'
 import { useResponsive } from './composables/useResponsive'
+import { getEnterpriseStatus } from './api/enterprise'
 
 const route = useRoute()
 const isDark = useDark()
 const { isMobile } = useResponsive()
 
 const sidebarOpen = ref(false)
+
+// Auth codes waiting for approval, shown beside the sidebar link.
+const pendingCount = ref(0)
+let pendingTimer: number | null = null
+const fetchPending = async () => {
+  try {
+    const status = await getEnterpriseStatus()
+    pendingCount.value = status.enabled ? status.pending : 0
+  } catch {
+    pendingCount.value = 0
+  }
+}
+onMounted(() => {
+  fetchPending()
+  pendingTimer = window.setInterval(fetchPending, 5000)
+})
+onUnmounted(() => {
+  if (pendingTimer !== null) window.clearInterval(pendingTimer)
+})
 
 const toggleSidebar = () => {
   sidebarOpen.value = !sidebarOpen.value
@@ -152,7 +191,12 @@ html.dark {
 body {
   margin: 0;
   font-family:
-    ui-sans-serif, -apple-system, system-ui, Segoe UI, Helvetica, Arial,
+    ui-sans-serif,
+    -apple-system,
+    system-ui,
+    Segoe UI,
+    Helvetica,
+    Arial,
     sans-serif;
 }
 
@@ -328,6 +372,19 @@ html.dark .theme-switch {
   color: var(--text-primary);
   background: var(--hover-bg);
   font-weight: 500;
+}
+
+.sidebar-badge {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 6px;
+  margin-left: 6px;
+  border-radius: 9px;
+  background: var(--el-color-danger);
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
 }
 
 /* Hamburger button (mobile only) */

@@ -94,6 +94,9 @@ type ServiceOptions struct {
 	//
 	// If it is not set, the default frpc implementation will be used.
 	HandleWorkConnCb func(*v1.ProxyBaseConfig, net.Conn, *msg.StartWorkConn) bool
+
+	// EventHandler receives login and enterprise events. It is optional.
+	EventHandler EventHandler
 }
 
 // setServiceOptionsDefault sets the default values for ServiceOptions.
@@ -163,6 +166,9 @@ type Service struct {
 
 	connectorCreator func(context.Context, *v1.ClientCommonConfig) Connector
 	handleWorkConnCb func(*v1.ProxyBaseConfig, net.Conn, *msg.StartWorkConn) bool
+
+	// enterprise data pushed by the server
+	ent *entState
 }
 
 func NewService(options ServiceOptions) (*Service, error) {
@@ -233,6 +239,7 @@ func NewService(options ServiceOptions) (*Service, error) {
 		storeSource:      storeSource,
 		connectorCreator: options.ConnectorCreator,
 		handleWorkConnCb: options.HandleWorkConnCb,
+		ent:              newEntState(options.EventHandler),
 	}
 
 	if webServer != nil {
@@ -330,6 +337,7 @@ func (svr *Service) keepControllerWorking() {
 		return
 	}
 	<-ctl.Done()
+	svr.ent.disconnected()
 
 	// There is a situation where the login is successful but due to certain reasons,
 	// the control immediately exits. It is necessary to limit the frequency of reconnection in this case.
@@ -376,6 +384,7 @@ func (svr *Service) loopLoginUntilSuccess(maxInterval time.Duration, firstLoginE
 			connectorCreator: svr.connectorCreator,
 		}
 		sessionCtx, err := dialer.Dial(svr.runID)
+		svr.ent.loginResult(err)
 		if err != nil {
 			xl.Warnf("connect to server error: %v", err)
 			if firstLoginExit {
@@ -388,6 +397,7 @@ func (svr *Service) loopLoginUntilSuccess(maxInterval time.Duration, firstLoginE
 		xl.AddPrefix(xlog.LogPrefix{Name: "runID", Value: svr.runID})
 		xl.Infof("login to server success, get run id [%s]", svr.runID)
 
+		sessionCtx.Ent = svr.ent
 		ctl, err := NewControl(svr.ctx, sessionCtx)
 		if err != nil {
 			sessionCtx.Conn.Close()

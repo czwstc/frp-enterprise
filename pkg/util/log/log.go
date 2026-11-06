@@ -16,6 +16,7 @@ package log
 
 import (
 	"bytes"
+	"io"
 	"os"
 
 	"github.com/fatedier/golib/log"
@@ -65,6 +66,23 @@ func InitLogger(logPath string, levelStr string, maxDays int, disableLogColor bo
 	}
 	options = append(options, log.WithLevel(level))
 	Logger = Logger.WithOptions(options...)
+}
+
+// Level is a log level.
+type Level = log.Level
+
+// LevelWriter is an output that also receives the level and time of each
+// line. Outputs given to InitLoggerWithWriter may implement it.
+type LevelWriter = log.Writer
+
+// InitLoggerWithWriter sends all log output to w, for programs that embed
+// frp and show its logs themselves.
+func InitLoggerWithWriter(w io.Writer, levelStr string) {
+	level, err := log.ParseLevel(levelStr)
+	if err != nil {
+		level = log.InfoLevel
+	}
+	Logger = Logger.WithOptions(log.WithOutput(w), log.WithLevel(level))
 }
 
 func Errorf(format string, v ...any) {

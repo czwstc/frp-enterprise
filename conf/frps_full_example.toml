@@ -170,6 +170,12 @@ natholeAnalysisDataReserveHours = 168
 # sshTunnelGateway.autoGenPrivateKeyPath = ""
 # sshTunnelGateway.authorizedKeysFile = "/home/frp-user/.ssh/authorized_keys"
 
+# Enterprise login: every client must log in with an auth code approved by the
+# administrator, one device per code. Codes are generated, approved, rejected and
+# revoked in the dashboard (webServer) or with the /api/enterprise/* APIs.
+# enterprise.enabled = true
+# enterprise.storePath = "./frps_enterprise.json"
+
 [[httpPlugins]]
 name = "user-manager"
 addr = "127.0.0.1:9000"
