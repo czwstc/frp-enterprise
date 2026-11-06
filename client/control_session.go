@@ -19,9 +19,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/samber/lo"
@@ -115,7 +117,7 @@ func (d *controlSessionDialer) buildLoginMsg(previousRunID string) (*msg.Login, 
 		Version:   version.Full(),
 		Timestamp: time.Now().Unix(),
 		RunID:     previousRunID,
-		Metas:     d.common.Metadatas,
+		Metas:     buildLoginMetas(d.common),
 	}
 	if d.clientSpec != nil {
 		loginMsg.ClientSpec = *d.clientSpec
@@ -125,6 +127,18 @@ func (d *controlSessionDialer) buildLoginMsg(previousRunID string) (*msg.Login, 
 		return nil, err
 	}
 	return loginMsg, nil
+}
+
+// buildLoginMetas copies the user metadata and adds the enterprise login
+// metadata, so the shared config map is never mutated.
+func buildLoginMetas(common *v1.ClientCommonConfig) map[string]string {
+	metas := make(map[string]string, len(common.Metadatas)+2)
+	maps.Copy(metas, common.Metadatas)
+	metas[msg.EntMetaCaps] = msg.EntCapsV1
+	if code := strings.TrimSpace(common.Enterprise.AuthCode); code != "" {
+		metas[msg.EntMetaAuthCode] = code
+	}
+	return metas
 }
 
 type loginExchangeResult struct {

@@ -59,6 +59,8 @@ var msgTypeMap = map[byte]any{
 	TypeNatHoleResp:        NatHoleResp{},
 	TypeNatHoleSid:         NatHoleSid{},
 	TypeNatHoleReport:      NatHoleReport{},
+	TypeEntSnapshot:        EntSnapshot{},
+	TypeEntNotice:          EntNotice{},
 }
 
 var TypeNameNatHoleResp = reflect.TypeFor[NatHoleResp]().Name()

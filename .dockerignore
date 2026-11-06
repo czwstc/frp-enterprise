@@ -1,0 +1,8 @@
+.git
+bin
+release
+.cache
+**/node_modules
+web/*/dist
+desktop/*/build
+desktop/*/.mygo

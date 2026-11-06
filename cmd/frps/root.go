@@ -109,6 +109,8 @@ func Execute() {
 }
 
 func runServer(cfg *v1.ServerConfig) (err error) {
+	// Keep recent lines for the dashboard's runtime log.
+	log.EnableMemory(2000)
 	log.InitLogger(cfg.Log.To, cfg.Log.Level, int(cfg.Log.MaxDays), cfg.Log.DisablePrintColor)
 
 	if cfgFile != "" {

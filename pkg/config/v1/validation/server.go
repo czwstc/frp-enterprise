@@ -16,7 +16,9 @@ package validation
 
 import (
 	"fmt"
+	"net/url"
 	"slices"
+	"strings"
 
 	"github.com/samber/lo"
 
@@ -61,10 +63,56 @@ func (v *ConfigValidator) ValidateServerConfig(c *v1.ServerConfig) (Warning, err
 		errs = AppendError(errs, fmt.Errorf("invalid transport.maxPoolCount, must be non-negative"))
 	}
 
+	errs = AppendError(errs, validateAdminAuthConfig(c))
+
 	for _, p := range c.HTTPPlugins {
 		if !lo.Every(SupportedHTTPPluginOps, p.Ops) {
 			errs = AppendError(errs, fmt.Errorf("invalid http plugin ops, optional values are %v", SupportedHTTPPluginOps))
 		}
 	}
 	return warnings, errs
+}
+
+func validateAdminAuthConfig(c *v1.ServerConfig) error {
+	a := &c.Enterprise.Admin
+	if !a.Enabled {
+		return nil
+	}
+	var errs error
+	if c.WebServer.Port <= 0 {
+		errs = AppendError(errs, fmt.Errorf("enterprise.admin requires webServer.port"))
+	}
+	// A missing environment variable in {{ .Envs.X }} renders as "<no value>",
+	// which must never become a password.
+	for field, v := range map[string]string{
+		"localUser.username":     a.LocalUser.Username,
+		"localUser.password":     a.LocalUser.Password,
+		"localUser.passwordHash": a.LocalUser.PasswordHash,
+		"oidc.issuer":            a.OIDC.Issuer,
+		"oidc.clientID":          a.OIDC.ClientID,
+		"oidc.clientSecret":      a.OIDC.ClientSecret,
+		"oidc.redirectURL":       a.OIDC.RedirectURL,
+		"oidc.displayName":       a.OIDC.DisplayName,
+	} {
+		if strings.Contains(v, "<no value>") {
+			errs = AppendError(errs, fmt.Errorf("enterprise.admin.%s comes from an environment variable that is not set", field))
+		}
+	}
+	if a.LocalUser.Password == "" && a.LocalUser.PasswordHash == "" {
+		errs = AppendError(errs, fmt.Errorf("enterprise.admin.localUser.password or passwordHash is required"))
+	}
+	if a.LocalUser.Password != "" && len(a.LocalUser.Password) < 8 {
+		errs = AppendError(errs, fmt.Errorf("enterprise.admin.localUser.password must be at least 8 characters"))
+	}
+	if o := &a.OIDC; o.OIDCEnabled() {
+		if o.ClientID == "" {
+			errs = AppendError(errs, fmt.Errorf("enterprise.admin.oidc.clientID is required"))
+		}
+		if o.RedirectURL == "" {
+			errs = AppendError(errs, fmt.Errorf("enterprise.admin.oidc.redirectURL is required"))
+		} else if u, err := url.Parse(o.RedirectURL); err != nil || u.Path == "" || u.Path == "/" || (u.Scheme != "http" && u.Scheme != "https") {
+			errs = AppendError(errs, fmt.Errorf("enterprise.admin.oidc.redirectURL must be an absolute http(s) URL with a path"))
+		}
+	}
+	return errs
 }

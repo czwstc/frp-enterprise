@@ -603,6 +603,17 @@ func (pm *Manager) Del(name string) {
 	delete(pm.pxys, name)
 }
 
+// List returns all proxies.
+func (pm *Manager) List() []Proxy {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	out := make([]Proxy, 0, len(pm.pxys))
+	for _, pxy := range pm.pxys {
+		out = append(out, pxy)
+	}
+	return out
+}
+
 func (pm *Manager) GetByName(name string) (pxy Proxy, ok bool) {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()

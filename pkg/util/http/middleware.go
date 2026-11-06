@@ -32,9 +32,15 @@ func (rw *responseWriter) WriteHeader(code int) {
 
 func NewRequestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Infof("http request: [%s]", r.URL.Path)
+		// Dashboards poll with GET every few seconds: keep those at debug
+		// level so the log shows the requests that change something.
+		logf := log.Infof
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			logf = log.Debugf
+		}
+		logf("http request: %s [%s]", r.Method, r.URL.Path)
 		rw := &responseWriter{ResponseWriter: w, code: http.StatusOK}
 		next.ServeHTTP(rw, r)
-		log.Infof("http response [%s]: code [%d]", r.URL.Path, rw.code)
+		logf("http response %s [%s]: code [%d]", r.Method, r.URL.Path, rw.code)
 	})
 }

@@ -26,13 +26,27 @@ export interface V2Page<T> {
 
 type QueryParamValue = string | number | boolean | null | undefined
 
+// Sent with every request: with dashboard accounts, frps refuses changes
+// without it, which keeps other sites from making them in the admin's name.
+const CSRF_HEADER = { 'X-FRP-Request': '1' }
+
+let onUnauthorized: (() => void) | null = null
+
+// setUnauthorizedHandler sets what happens when the session has ended.
+export const setUnauthorizedHandler = (fn: () => void) => {
+  onUnauthorized = fn
+}
+
+const withDefaults = (options: RequestInit): RequestInit => ({
+  credentials: 'include',
+  ...options,
+  headers: { ...CSRF_HEADER, ...(options.headers || {}) },
+})
+
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const defaultOptions: RequestInit = {
-    credentials: 'include',
-  }
+  const response = await fetch(url, withDefaults(options))
 
-  const response = await fetch(url, { ...defaultOptions, ...options })
-
+  if (response.status === 401 && onUnauthorized) onUnauthorized()
   if (!response.ok) {
     throw new HTTPError(
       response.status,
@@ -53,14 +67,11 @@ async function requestV2<T>(
   url: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const defaultOptions: RequestInit = {
-    credentials: 'include',
-  }
-
-  const response = await fetch(url, { ...defaultOptions, ...options })
-  const envelope = (await response.json().catch(() => null)) as
-    | V2Envelope<T>
-    | null
+  const response = await fetch(url, withDefaults(options))
+  if (response.status === 401 && onUnauthorized) onUnauthorized()
+  const envelope = (await response
+    .json()
+    .catch(() => null)) as V2Envelope<T> | null
 
   if (!response.ok) {
     throw new HTTPError(
@@ -121,4 +132,6 @@ export const http = {
     }),
   delete: <T>(url: string, options?: RequestInit) =>
     request<T>(url, { ...options, method: 'DELETE' }),
+  deleteV2: <T>(url: string, options?: RequestInit) =>
+    requestV2<T>(url, { ...options, method: 'DELETE' }),
 }

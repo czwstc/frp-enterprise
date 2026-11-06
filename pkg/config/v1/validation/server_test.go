@@ -49,3 +49,38 @@ func TestValidateServerConfigMaxPoolCount(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateAdminAuthConfig(t *testing.T) {
+	base := func() *v1.ServerConfig {
+		c := &v1.ServerConfig{}
+		c.WebServer.Port = 7500
+		c.Enterprise.Admin.Enabled = true
+		c.Enterprise.Admin.LocalUser.Password = "long-enough"
+		return c
+	}
+	require.NoError(t, validateAdminAuthConfig(base()))
+
+	c := base()
+	c.WebServer.Port = 0
+	require.Error(t, validateAdminAuthConfig(c))
+
+	c = base()
+	c.Enterprise.Admin.LocalUser.Password = ""
+	require.Error(t, validateAdminAuthConfig(c))
+
+	c = base()
+	c.Enterprise.Admin.LocalUser.Password = "<no value>"
+	require.ErrorContains(t, validateAdminAuthConfig(c), "environment variable")
+
+	c = base()
+	c.Enterprise.Admin.OIDC = v1.AdminOIDCConfig{Issuer: "https://idp", ClientID: "x", ClientSecret: "<no value>", RedirectURL: "http://h/relay"}
+	require.ErrorContains(t, validateAdminAuthConfig(c), "environment variable")
+
+	c = base()
+	c.Enterprise.Admin.OIDC = v1.AdminOIDCConfig{Issuer: "https://idp", ClientID: "x", RedirectURL: "http://h"}
+	require.ErrorContains(t, validateAdminAuthConfig(c), "path")
+
+	c = base()
+	c.Enterprise.Admin.OIDC = v1.AdminOIDCConfig{Issuer: "https://idp", ClientID: "x", RedirectURL: "http://h/relay"}
+	require.NoError(t, validateAdminAuthConfig(c))
+}
