@@ -12,6 +12,7 @@ export interface Branding {
   subtitle: string
   logo?: string
   logoMode: 'both' | 'logo'
+  logoBackdrop: 'halo' | 'plate' | 'none'
   theme: 'system' | 'light' | 'dark'
   accent: string
   topLink: TopLink

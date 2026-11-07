@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ type backend interface {
 	VerifyPassword(pw string) bool
 	SetLockPassword(current, pw string) error
 	DisableLock(current string) error
+	SetPublicIPSource(mode, url string) error
 }
 
 // managerBackend adapts *enterprise.Manager to backend.
@@ -53,6 +55,7 @@ const (
 	tabNotices
 	tabLogs
 	tabSecurity
+	tabPrefs
 )
 
 // app is the state the window shows. All fields are read and written on the
@@ -106,6 +109,16 @@ type app struct {
 	logo    brandLogo
 	history []float32
 
+	// localIP is the local address chosen in the overview's drop-down.
+	localIP string
+
+	// preferences page
+	ipMode    int // 0 server, 1 api, 2 off
+	ipURL     string
+	prefsMsg  string
+	prefsErr  string
+	prefsInit bool
+
 	actionErr string
 }
 
@@ -138,13 +151,22 @@ func (a *app) fillLoginForm() {
 func (a *app) refresh() {
 	a.settings = a.be.Settings()
 	a.status = a.be.Status()
-	a.logo.update(a.status.Branding.Logo)
+	a.logo.update(a.status.Branding.Logo, a.status.Branding.LogoBackdrop)
 	level := float32(0.15)
 	switch a.status.State {
 	case enterprise.StateRunning:
 		level = 1
 	case enterprise.StateConnecting, enterprise.StatePending:
 		level = 0.5
+	}
+	if !slices.Contains(a.status.LocalIPs, a.localIP) {
+		a.localIP = ""
+		if len(a.status.LocalIPs) > 0 {
+			a.localIP = a.status.LocalIPs[0]
+		}
+	}
+	if !a.prefsInit {
+		a.loadPrefsForm()
 	}
 	a.history = append(a.history, level)
 	if len(a.history) > 240 {

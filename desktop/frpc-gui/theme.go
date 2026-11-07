@@ -2,8 +2,17 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/base64"
+	"image"
+	"image/color"
+	"image/draw"
+	_ "image/jpeg"
+	_ "image/png"
 	"strings"
+
+	xdraw "golang.org/x/image/draw"
+	_ "golang.org/x/image/webp"
 
 	"github.com/egoist/mygo/ui"
 
@@ -93,6 +102,8 @@ var iconPaths = map[string]string{
 	"check": `<path d="M3.5 8.5l3 3L12.5 5"/>`,
 	"pause": `<path d="M5.5 3.5v9M10.5 3.5v9"/>`,
 	"x":     `<path d="M4 4l8 8M12 4l-8 8"/>`,
+	"gear":  `<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>`,
+	"globe": `<circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12"/>`,
 }
 
 var icons = func() map[string]*ui.SVG {
@@ -111,53 +122,165 @@ func iconSquare(c *ui.Context, name string, bg ui.Color, size float32) {
 	})
 }
 
-// brandLogo is the server's logo, decoded once per change.
+//go:embed brand_logo.png
+var huidingLogoPNG []byte
+
+// brandLogo is the logo shown in the sidebar: the server's, or the Huiding
+// logo, prepared once per change with the backdrop the server chose.
 type brandLogo struct {
-	src string
-	img ui.ImageSource
+	key      string
+	img      ui.ImageSource
+	plate    bool
+	fallback bool
 }
 
-func (b *brandLogo) update(dataURL string) {
-	if dataURL == b.src {
+func (b *brandLogo) update(dataURL, backdrop string) {
+	if backdrop == "" {
+		backdrop = "halo"
+	}
+	key := backdrop + "|" + dataURL
+	if key == b.key && b.img != nil {
 		return
 	}
-	b.src, b.img = dataURL, nil
+	b.key, b.img, b.plate, b.fallback = key, nil, backdrop == "plate", false
+	raw, kind := decodeDataURL(dataURL)
+	if raw == nil {
+		raw, kind, b.fallback = huidingLogoPNG, "png", true
+	}
+	if kind == "svg+xml" {
+		svg, err := ui.ParseSVG(raw)
+		if err == nil {
+			b.img = svg
+			// An SVG cannot be traced for a halo: give it a plate instead.
+			b.plate = backdrop != "none"
+			return
+		}
+		raw, b.fallback = huidingLogoPNG, true
+	}
+	src, _, err := image.Decode(bytes.NewReader(raw))
+	if err != nil {
+		src, _, _ = image.Decode(bytes.NewReader(huidingLogoPNG))
+		b.fallback = true
+	}
+	// Scale to the size the sidebar shows (twice its DIPs, for Retina), so
+	// the halo is a few screen pixels wide rather than shrinking away.
+	src = scaleToHeight(src, 2*logoHeight)
+	if backdrop == "halo" {
+		src = withHalo(src)
+	}
+	b.img = ui.NewBitmap(src)
+}
+
+func decodeDataURL(dataURL string) ([]byte, string) {
 	const prefix = "data:image/"
 	if !strings.HasPrefix(dataURL, prefix) {
-		return
+		return nil, ""
 	}
 	kind, payload, ok := strings.Cut(dataURL[len(prefix):], ";base64,")
 	if !ok {
-		return
+		return nil, ""
 	}
 	raw, err := base64.StdEncoding.DecodeString(payload)
 	if err != nil {
-		return
+		return nil, ""
 	}
-	if kind == "svg+xml" {
-		if svg, err := ui.ParseSVG(raw); err == nil {
-			b.img = svg
-		}
-		return
-	}
-	if bmp, err := ui.DecodeBitmap(bytes.Clone(raw)); err == nil {
-		b.img = bmp
-	}
+	return raw, kind
 }
 
-// brandMark shows the server's logo, or the Huiding mark until one is set.
-func (a *app) brandMark(c *ui.Context, _ palette) {
-	t := c.Theme()
-	if a.logo.img != nil {
-		ui.Image(c, a.logo.img).Height(28).MaxWidth(150).Fit(ui.Contain)
-		return
+// logoHeight is the logo's height in the sidebar, in DIPs.
+const logoHeight = 30
+
+func scaleToHeight(src image.Image, h int) image.Image {
+	b := src.Bounds()
+	if b.Dy() <= h {
+		return src
 	}
-	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "hJ").Font("Georgia").Italic().Bold().FontSize(22).TextColor(t.Accent)
-		ui.Column(c).Children(func() {
-			ui.Text(c, "汇鼎科技").Bold().FontSize(12)
-			ui.Text(c, "HUIDING GROUP").FontSize(7).LetterSpacing(0.8).TextColor(t.TextMuted)
-		})
+	w := b.Dx() * h / b.Dy()
+	dst := image.NewNRGBA(image.Rect(0, 0, w, h))
+	xdraw.CatmullRom.Scale(dst, dst.Bounds(), src, b, xdraw.Src, nil)
+	return dst
+}
+
+// withHalo draws a soft black glow traced around the logo's shape under it,
+// so a white logo on a transparent background reads on a light sidebar.
+func withHalo(src image.Image) image.Image {
+	const pad, grow, blur = 5, 1, 2
+	b := src.Bounds()
+	w, h := b.Dx()+2*pad, b.Dy()+2*pad
+	alpha := make([]float32, w*h)
+	for y := 0; y < b.Dy(); y++ {
+		for x := 0; x < b.Dx(); x++ {
+			_, _, _, a := src.At(b.Min.X+x, b.Min.Y+y).RGBA()
+			alpha[(y+pad)*w+x+pad] = float32(a) / 0xffff
+		}
+	}
+	// Grow the shape by a few pixels, then soften it with a box blur.
+	grown := make([]float32, w*h)
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			m := float32(0)
+			for dy := -grow; dy <= grow; dy++ {
+				for dx := -grow; dx <= grow; dx++ {
+					xx, yy := x+dx, y+dy
+					if xx >= 0 && yy >= 0 && xx < w && yy < h && alpha[yy*w+xx] > m {
+						m = alpha[yy*w+xx]
+					}
+				}
+			}
+			grown[y*w+x] = m
+		}
+	}
+	soft := boxBlur(grown, w, h, blur)
+	out := image.NewNRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			halo := min(1, soft[y*w+x]*1.6) * 0.9
+			out.SetNRGBA(x, y, color.NRGBA{A: uint8(halo * 255)})
+		}
+	}
+	draw.Draw(out, image.Rect(pad, pad, pad+b.Dx(), pad+b.Dy()), src, b.Min, draw.Over)
+	return out
+}
+
+func boxBlur(in []float32, w, h, r int) []float32 {
+	tmp := make([]float32, len(in))
+	out := make([]float32, len(in))
+	n := float32(2*r + 1)
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			sum := float32(0)
+			for d := -r; d <= r; d++ {
+				if xx := x + d; xx >= 0 && xx < w {
+					sum += in[y*w+xx]
+				}
+			}
+			tmp[y*w+x] = sum / n
+		}
+	}
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			sum := float32(0)
+			for d := -r; d <= r; d++ {
+				if yy := y + d; yy >= 0 && yy < h {
+					sum += tmp[yy*w+x]
+				}
+			}
+			out[y*w+x] = sum / n
+		}
+	}
+	return out
+}
+
+// brandMark shows the logo alone, on a dark plate when the server asks.
+func (a *app) brandMark(c *ui.Context, _ palette) {
+	box := ui.Row(c).AlignItems(ui.Center)
+	if a.logo.plate {
+		box.Background(ui.Hex("#1b2233")).Radius(8).Padding(6, 10)
+	}
+	box.Children(func() {
+		if a.logo.img != nil {
+			ui.Image(c, a.logo.img).Height(logoHeight + 5).MaxWidth(190).Fit(ui.Contain).Label(siteName(a.status.Branding))
+		}
 	})
 }
 

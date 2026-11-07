@@ -6,7 +6,8 @@ import type { Branding } from '../api/branding'
 export const defaultBranding = (): Branding => ({
   siteName: 'HDIT FRPE',
   subtitle: '内网穿透控制台',
-  logoMode: 'both',
+  logoMode: 'logo',
+  logoBackdrop: 'halo',
   theme: 'system',
   accent: '#1f5eff',
   topLink: {

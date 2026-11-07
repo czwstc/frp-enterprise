@@ -56,6 +56,10 @@ type Settings struct {
 	Logo string `json:"logo,omitempty"`
 	// LogoMode is "both" (logo and name) or "logo" (a wide logo alone).
 	LogoMode string `json:"logoMode"`
+	// LogoBackdrop keeps a light logo readable on a light background:
+	// "halo" (a dark glow traced around it), "plate" (a dark rounded plate)
+	// or "none".
+	LogoBackdrop string `json:"logoBackdrop"`
 	// Theme is "system", "light" or "dark".
 	Theme string `json:"theme"`
 	// Accent is a #rrggbb color.
@@ -69,12 +73,13 @@ type Settings struct {
 // Defaults is the built-in Huiding branding.
 func Defaults() Settings {
 	return Settings{
-		SiteName: "HDIT FRPE",
-		Subtitle: "内网穿透控制台",
-		LogoMode: "both",
-		Theme:    "system",
-		Accent:   "#1f5eff",
-		TopLink:  TopLink{Mode: LinkCustom, URL: "https://www.huiding-group.com/", Text: "汇鼎科技官网"},
+		SiteName:     "HDIT FRPE",
+		Subtitle:     "内网穿透控制台",
+		LogoMode:     "logo",
+		LogoBackdrop: "halo",
+		Theme:        "system",
+		Accent:       "#1f5eff",
+		TopLink:      TopLink{Mode: LinkCustom, URL: "https://www.huiding-group.com/", Text: "汇鼎科技官网"},
 	}
 }
 
@@ -145,6 +150,13 @@ func (s *Settings) Normalize() error {
 		s.LogoMode = "both"
 	default:
 		return errors.New("图标显示方式无效")
+	}
+	switch s.LogoBackdrop {
+	case "halo", "plate", "none":
+	case "":
+		s.LogoBackdrop = "halo"
+	default:
+		return errors.New("图标底衬无效")
 	}
 	switch s.Theme {
 	case "system", "light", "dark":

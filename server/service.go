@@ -1101,5 +1101,5 @@ func (svr *Service) recordAudit(action, target, detail, ip string, ok bool) {
 // clientBranding is the look sent to the desktop clients.
 func (svr *Service) clientBranding() *msg.EntBranding {
 	b := svr.branding.Get()
-	return &msg.EntBranding{Version: b.Version, SiteName: b.SiteName, Accent: b.Accent, Logo: b.Logo}
+	return &msg.EntBranding{Version: b.Version, SiteName: b.SiteName, Accent: b.Accent, Logo: b.Logo, LogoBackdrop: b.LogoBackdrop}
 }

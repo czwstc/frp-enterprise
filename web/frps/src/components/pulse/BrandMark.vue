@@ -1,19 +1,15 @@
 <template>
   <div class="brand-mark">
-    <img
-      v-if="branding.logo"
-      :src="branding.logo"
-      :alt="branding.siteName"
-      class="logo-img"
-    />
-    <!-- Placeholder for the Huiding wordmark until a logo is uploaded -->
-    <span v-else class="placeholder" aria-hidden="true">
-      <i>hJ</i>
-      <span class="ph-text"><b>汇鼎科技</b><small>HUIDING GROUP</small></span>
+    <span class="logo-wrap" :class="`bd-${branding.logoBackdrop || 'halo'}`">
+      <img
+        :src="branding.logo || defaultLogo"
+        :alt="branding.siteName"
+        class="logo-img"
+      />
     </span>
     <div
-      v-if="showName && (branding.logoMode === 'both' || !branding.logo)"
-      class="names"
+      v-if="showName && branding.logoMode === 'both'"
+      class="names with-logo"
     >
       <div class="name">{{ branding.siteName }}</div>
       <div v-if="subtitle" class="sub">{{ subtitle }}</div>
@@ -23,6 +19,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import defaultLogo from '../../assets/huiding-logo.png'
 import { useBranding } from '../../composables/useBranding'
 
 const props = withDefaults(
@@ -43,36 +40,31 @@ const subtitle = computed(() => props.sub ?? branding.value.subtitle)
   gap: 10px;
   min-width: 0;
 }
-.logo-img {
-  max-height: 30px;
-  max-width: 160px;
-  display: block;
-}
-.placeholder {
+.logo-wrap {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
   flex: none;
 }
-.placeholder i {
-  font-family: Georgia, 'Times New Roman', serif;
-  font-weight: 700;
-  font-size: 22px;
-  color: var(--accent);
-  line-height: 1;
+.logo-img {
+  height: 30px;
+  max-width: 190px;
+  object-fit: contain;
+  display: block;
 }
-.ph-text {
-  display: grid;
-  line-height: 1.1;
+/* A dark glow traced around the logo's own shape keeps a white logo
+   readable on the light sidebar. */
+.bd-halo .logo-img {
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.85))
+    drop-shadow(0 0 2px rgba(0, 0, 0, 0.6))
+    drop-shadow(0 1px 4px rgba(0, 0, 0, 0.35));
 }
-.ph-text b {
-  font-size: 12px;
-  color: var(--el-text-color-primary);
+.bd-plate {
+  background: #1b2233;
+  border-radius: 8px;
+  padding: 6px 10px;
 }
-.ph-text small {
-  font-size: 7px;
-  letter-spacing: 0.1em;
-  color: var(--el-text-color-secondary);
+.brand-mark:has(.with-logo) .logo-img {
+  height: 22px;
+  max-width: 96px;
 }
 .names {
   min-width: 0;

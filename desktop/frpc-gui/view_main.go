@@ -58,13 +58,14 @@ func (a *app) navGroups() []struct {
 		}},
 		{"设备", []navItem{
 			{tabSecurity, "lock", "安全", func(p palette) ui.Color { return p.violet }, "", false},
+			{tabPrefs, "gear", "设置", func(p palette) ui.Color { return p.gray }, "", false},
 		}},
 	}
 }
 
 var tabTitles = map[int]string{
 	tabOverview: "概览", tabProxies: "端口映射", tabPorts: "服务端端口",
-	tabNotices: "通知", tabLogs: "日志", tabSecurity: "安全",
+	tabNotices: "通知", tabLogs: "日志", tabSecurity: "安全", tabPrefs: "设置",
 }
 
 func (a *app) mainView(c *ui.Context, p palette) {
@@ -86,6 +87,8 @@ func (a *app) mainView(c *ui.Context, p palette) {
 					a.logsTab(c, p)
 				case tabSecurity:
 					a.securityTab(c, p)
+				case tabPrefs:
+					a.prefsTab(c, p)
 				}
 			})
 		})
@@ -96,9 +99,8 @@ func (a *app) mainView(c *ui.Context, p palette) {
 func (a *app) sidebar(c *ui.Context, p palette) {
 	t := c.Theme()
 	ui.Column(c).Width(210).Background(p.side).Padding(12, 10).Gap(14).Children(func() {
-		ui.Column(c).Padding(4, 6).Gap(6).Children(func() {
+		ui.Column(c).Padding(4, 4).Children(func() {
 			a.brandMark(c, p)
-			ui.Text(c, AppName).FontSize(11).TextColor(t.TextMuted)
 		})
 		for _, g := range a.navGroups() {
 			ui.Column(c).Gap(1).Children(func() {
@@ -238,7 +240,12 @@ func (a *app) overviewTab(c *ui.Context, p palette) {
 				})
 			})
 			publicIP := st.PublicIP
-			if publicIP == "" {
+			switch {
+			case st.PublicIPSource.Mode == enterprise.PublicIPOff:
+				publicIP = "已关闭"
+			case publicIP == "" && st.PublicIPError != "":
+				publicIP = st.PublicIPError
+			case publicIP == "":
 				publicIP = "连接后由服务端告知"
 			}
 			running := 0
@@ -256,8 +263,22 @@ func (a *app) overviewTab(c *ui.Context, p palette) {
 				}
 			}
 			ui.Row(c).Gap(12).Children(func() {
-				kv(c, "当前公网 IP", publicIP)
-				kv(c, "本机 IP", joinOr(st.LocalIPs, "无"))
+				kv(c, "当前公网 IP · "+publicIPSourceLabel(st.PublicIPSource), publicIP)
+				ui.Column(c).Grow(1).Basis(0).Gap(2).Children(func() {
+					label := "本机 IP"
+					if n := len(st.LocalIPs); n > 1 {
+						label = fmt.Sprintf("本机 IP（共 %d 个）", n)
+					}
+					ui.Text(c, label).FontSize(11).TextColor(t.TextMuted)
+					switch len(st.LocalIPs) {
+					case 0:
+						ui.Text(c, "无").Bold()
+					case 1:
+						ui.Text(c, st.LocalIPs[0]).Bold().Selectable()
+					default:
+						ui.Select(c.Key("local-ip"), &a.localIP, st.LocalIPs).Label("本机 IP").MaxWidth(220)
+					}
+				})
 				kv(c, "端口映射", fmt.Sprintf("%d 个，运行中 %d 个", len(st.Proxies), running))
 				kv(c, "服务端端口", fmt.Sprintf("本机 %d · 其他 %d", mine, others))
 			})
@@ -667,4 +688,83 @@ func (a *app) secMessages(c *ui.Context, p palette) {
 	if a.secOK != "" {
 		ui.Text(c, a.secOK).TextColor(p.green).Wrap()
 	}
+}
+
+func publicIPSourceLabel(p enterprise.PublicIPSetting) string {
+	switch p.Mode {
+	case enterprise.PublicIPAPI:
+		host := strings.TrimPrefix(strings.TrimPrefix(p.URL, "https://"), "http://")
+		host, _, _ = strings.Cut(host, "/")
+		return host
+	case enterprise.PublicIPOff:
+		return "未显示"
+	default:
+		return "服务端告知"
+	}
+}
+
+func (a *app) loadPrefsForm() {
+	a.prefsInit = true
+	src := a.settings.PublicIP
+	switch src.Mode {
+	case enterprise.PublicIPAPI:
+		a.ipMode = 1
+	case enterprise.PublicIPOff:
+		a.ipMode = 2
+	default:
+		a.ipMode = 0
+	}
+	a.ipURL = src.URL
+	if a.ipURL == "" {
+		a.ipURL = enterprise.DefaultPublicIPAPI
+	}
+}
+
+func (a *app) prefsTab(c *ui.Context, p palette) {
+	t := c.Theme()
+	st := a.status
+	ui.Scroll(c).Grow(1).Children(func() {
+		card(c, p).Width(560).Gap(t.Space(3)).Padding(16).Children(func() {
+			cardHeader(c, "globe", p.blue, "公网 IP 来源", nil)
+			ui.Text(c, "“服务端告知”是 frps 看到的本机连接来源地址，不需要访问外部网站；frps 部署在同一内网时它会是内网地址。"+
+				"“外部 API”向指定网址查询，返回纯文本 IP 或含 ip 字段的 JSON 都可以。").TextColor(t.TextMuted).Wrap()
+			ui.Form(c, func() {
+				ui.Field(c, "来源", func() {
+					ui.Segmented(c, &a.ipMode, "服务端告知", "外部 API", "不显示")
+				})
+				if a.ipMode == 1 {
+					ui.Field(c, "查询地址", func() {
+						ui.TextInput(c.Key("ip-url"), &a.ipURL).Placeholder(enterprise.DefaultPublicIPAPI)
+					}).Description("例如 https://api.ipify.org、https://ifconfig.me/ip、https://ipinfo.io/ip")
+				}
+				ui.Field(c, "当前结果", func() {
+					v := st.PublicIP
+					if v == "" {
+						v = st.PublicIPError
+					}
+					if v == "" {
+						v = "—"
+					}
+					ui.Text(c, v).Selectable()
+				})
+			})
+			if a.prefsErr != "" {
+				ui.Text(c, a.prefsErr).TextColor(p.red).Wrap()
+			}
+			if a.prefsMsg != "" {
+				ui.Text(c, a.prefsMsg).TextColor(p.green)
+			}
+			ui.Row(c).Justify(ui.End).Children(func() {
+				ui.PrimaryButton(c, "保存").OnClick(func() {
+					mode := []string{enterprise.PublicIPServer, enterprise.PublicIPAPI, enterprise.PublicIPOff}[a.ipMode]
+					if err := a.be.SetPublicIPSource(mode, a.ipURL); err != nil {
+						a.prefsErr, a.prefsMsg = err.Error(), ""
+						return
+					}
+					a.prefsErr, a.prefsMsg = "", "已保存"
+					a.refresh()
+				})
+			})
+		})
+	})
 }

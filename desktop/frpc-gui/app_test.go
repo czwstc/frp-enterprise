@@ -109,6 +109,15 @@ func (f *fakeBackend) SetLockPassword(cur, pw string) error {
 	f.password = pw
 	return nil
 }
+func (f *fakeBackend) SetPublicIPSource(mode, url string) error {
+	if mode == enterprise.PublicIPAPI && !strings.HasPrefix(url, "http") {
+		return errors.New("查询地址必须以 http:// 或 https:// 开头")
+	}
+	f.settings.PublicIP = enterprise.PublicIPSetting{Mode: mode, URL: url}
+	f.status.PublicIPSource = f.settings.PublicIP
+	return nil
+}
+
 func (f *fakeBackend) DisableLock(cur string) error {
 	if !f.VerifyPassword(cur) {
 		return errors.New("当前密码不正确")
@@ -349,11 +358,11 @@ func TestBrandingFromServer(t *testing.T) {
 	f.status.Branding = enterprise.Branding{Version: 3, SiteName: "汇鼎内网穿透", Accent: "#0e8f96"}
 	a := newApp(f)
 	tt := ui.NewTester(a.view, 920, 640)
-	if !tt.HasText("汇鼎内网穿透") || !tt.HasText(AppName) {
-		t.Errorf("sidebar does not show the server's name, texts %q", tt.Texts())
+	if !tt.HasText("汇鼎内网穿透") || tt.HasText(AppName) {
+		t.Errorf("the sidebar shows the logo and the server's name, not the app name; texts %q", tt.Texts())
 	}
-	if !tt.HasText("汇鼎科技") {
-		t.Errorf("placeholder mark missing without a logo, texts %q", tt.Texts())
+	if a.logo.img == nil || !a.logo.fallback {
+		t.Errorf("the Huiding logo should show without a server logo")
 	}
 
 	// A PNG logo replaces the placeholder mark.
@@ -365,18 +374,57 @@ func TestBrandingFromServer(t *testing.T) {
 	f.status.Branding.Logo = "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
 	a.refresh()
 	tt.Frame()
-	if a.logo.img == nil {
-		t.Fatal("logo not decoded")
-	}
-	if tt.HasText("汇鼎科技") {
-		t.Errorf("placeholder still shown with a logo, texts %q", tt.Texts())
+	if a.logo.img == nil || a.logo.fallback {
+		t.Fatal("server logo not decoded")
 	}
 
 	// A broken logo falls back to the placeholder.
 	f.status.Branding.Logo = "data:image/png;base64,@@@"
 	a.refresh()
 	tt.Frame()
-	if a.logo.img != nil || !tt.HasText("汇鼎科技") {
-		t.Errorf("broken logo not ignored")
+	if a.logo.img == nil || !a.logo.fallback {
+		t.Errorf("a broken logo should fall back to the Huiding logo")
+	}
+
+	// A plate backdrop is drawn behind the logo.
+	f.status.Branding.LogoBackdrop = "plate"
+	a.refresh()
+	if !a.logo.plate {
+		t.Error("plate backdrop not applied")
+	}
+}
+
+func TestLocalIPDropdownAndPublicIPSource(t *testing.T) {
+	f := connectedFake()
+	f.status.LocalIPs = []string{"192.168.1.20", "10.0.0.5", "fd00::1"}
+	a := newApp(f)
+	tt := ui.NewTester(a.view, 920, 640)
+	if a.localIP != "192.168.1.20" || !tt.HasText("本机 IP（共 3 个）") {
+		t.Fatalf("local ip %q, texts %q", a.localIP, tt.Texts())
+	}
+	if !tt.HasText("服务端告知") {
+		t.Errorf("public IP source not shown, texts %q", tt.Texts())
+	}
+
+	must(t, tt.Click("设置"))
+	if !tt.HasText("公网 IP 来源") {
+		t.Fatalf("settings page texts %q", tt.Texts())
+	}
+	a.ipMode = 1
+	a.ipURL = "ftp://bad"
+	tt.Frame()
+	must(t, tt.Click("保存"))
+	if !tt.HasText("查询地址必须") {
+		t.Errorf("bad URL accepted, texts %q", tt.Texts())
+	}
+	a.ipURL = "https://api.ipify.org"
+	tt.Frame()
+	must(t, tt.Click("保存"))
+	if f.settings.PublicIP.Mode != enterprise.PublicIPAPI || f.settings.PublicIP.URL != "https://api.ipify.org" {
+		t.Fatalf("saved %+v", f.settings.PublicIP)
+	}
+	must(t, tt.Click("概览"))
+	if !tt.HasText("api.ipify.org") {
+		t.Errorf("overview does not name the API, texts %q", tt.Texts())
 	}
 }

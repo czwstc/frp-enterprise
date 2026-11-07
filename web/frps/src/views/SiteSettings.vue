@@ -33,9 +33,8 @@
         <div class="field">
           <label>左上角图标</label>
           <div class="ctl">
-            <span class="logo-box">
-              <img v-if="form.logo" :src="form.logo" alt="" />
-              <span v-else class="muted">默认标志</span>
+            <span class="logo-box" :class="`bd-${form.logoBackdrop}`">
+              <img :src="form.logo || defaultLogo" alt="" />
             </span>
             <label class="upload">
               上传图片
@@ -51,6 +50,19 @@
             <span class="hint"
               >PNG、JPEG、WebP 或 SVG，不超过 512 KB；横版标志建议高度 60
               像素以上。</span
+            >
+          </div>
+        </div>
+        <div class="field">
+          <label>图标底衬</label>
+          <div class="ctl">
+            <el-radio-group v-model="form.logoBackdrop">
+              <el-radio-button value="halo">黑色光晕</el-radio-button>
+              <el-radio-button value="plate">深色底板</el-radio-button>
+              <el-radio-button value="none">无</el-radio-button>
+            </el-radio-group>
+            <span class="hint"
+              >白色或浅色的透明图标在浅色背景上需要光晕或底板才看得清。</span
             >
           </div>
         </div>
@@ -182,6 +194,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import TopLink from '../components/pulse/TopLink.vue'
+import defaultLogo from '../assets/huiding-logo.png'
 import { getBranding, saveBranding } from '../api/branding'
 import type { Branding } from '../api/branding'
 import { defaultBranding, useBranding } from '../composables/useBranding'
@@ -342,8 +355,17 @@ onBeforeUnmount(() => applyBranding(clone(saved.value)))
   width: 44px;
 }
 .logo-box img {
-  max-height: 30px;
+  max-height: 26px;
   max-width: 140px;
+}
+.logo-box.bd-halo img {
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.85))
+    drop-shadow(0 0 2px rgba(0, 0, 0, 0.6))
+    drop-shadow(0 1px 4px rgba(0, 0, 0, 0.35));
+}
+.logo-box.bd-plate {
+  background: #1b2233;
+  border-style: solid;
 }
 .upload {
   position: relative;

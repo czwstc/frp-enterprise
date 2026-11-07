@@ -78,4 +78,6 @@ type EntBranding struct {
 	Accent string `json:"accent,omitempty"`
 	// Logo is a data URL of a PNG, JPEG, WebP or SVG image, or empty.
 	Logo string `json:"logo,omitempty"`
+	// LogoBackdrop is "halo", "plate" or "none".
+	LogoBackdrop string `json:"logo_backdrop,omitempty"`
 }
