@@ -1,6 +1,6 @@
 {
-  "name": "FRP Client",
-  "identifier": "io.frp.enterprise.client",
-  "version": "0.1.0",
+  "name": "HDIT-FRPE-Client",
+  "identifier": "com.huiding.frpe.client",
+  "version": "1.0.0",
   "out": "build"
 }

@@ -87,6 +87,11 @@ type Status struct {
 	Ports       []msg.EntPort
 	Proxies     []ProxyStatus
 	Notices     []msg.EntNotice
+	Branding    Branding
+	// PublicIPSource is the source of PublicIP, and PublicIPError why it
+	// could not be found.
+	PublicIPSource PublicIPSetting
+	PublicIPError  string
 }
 
 // Manager runs the embedded frpc service and keeps its state.
@@ -103,6 +108,8 @@ type Manager struct {
 	connectedAt time.Time
 	snapshot    *msg.EntSnapshot
 	notices     []msg.EntNotice
+
+	publicIP publicIPState
 
 	cbMu     sync.Mutex
 	onChange func()
@@ -424,6 +431,25 @@ func (e *serviceEvents) OnEntSnapshot(snap *msg.EntSnapshot) {
 	m.changed()
 }
 
+func (e *serviceEvents) OnEntBranding(b *msg.EntBranding) {
+	m := e.m
+	m.mu.Lock()
+	next := Branding{Version: b.Version, SiteName: b.SiteName, Accent: b.Accent, Logo: b.Logo, LogoBackdrop: b.LogoBackdrop}
+	if m.gen != e.gen || m.settings.Branding == next {
+		m.mu.Unlock()
+		return
+	}
+	err := m.updateSettingsLocked(func(s *Settings) error {
+		s.Branding = next
+		return nil
+	})
+	m.mu.Unlock()
+	if err != nil {
+		log.Warnf("save branding: %v", err)
+	}
+	m.changed()
+}
+
 func (e *serviceEvents) OnEntNotice(n *msg.EntNotice) {
 	m := e.m
 	m.mu.Lock()
@@ -457,11 +483,19 @@ func (m *Manager) Status() Status {
 		AuthCode:    m.settings.AuthCode,
 		ConnectedAt: m.connectedAt,
 		Notices:     slices.Clone(m.notices),
+		Branding:    m.settings.Branding,
 	}
 	if m.snapshot != nil {
 		st.PublicIP = m.snapshot.ClientIP
 		st.AllowPorts = m.snapshot.AllowPorts
 		st.Ports = slices.Clone(m.snapshot.Ports)
+	}
+	st.PublicIPSource = m.settings.PublicIP.normalized()
+	switch st.PublicIPSource.Mode {
+	case PublicIPOff:
+		st.PublicIP = ""
+	case PublicIPAPI:
+		st.PublicIP, st.PublicIPError = m.publicIPFromAPILocked(st.PublicIPSource.URL)
 	}
 	svc := m.svc
 	proxies := slices.Clone(m.settings.Proxies)

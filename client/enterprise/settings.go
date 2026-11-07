@@ -64,6 +64,40 @@ type Settings struct {
 	AutoConnect bool           `json:"autoConnect"`
 	Proxies     []ProxySetting `json:"proxies"`
 	Lock        LockSetting    `json:"lock"`
+	// Branding is the look last received from the server.
+	Branding Branding `json:"branding,omitzero"`
+	// PublicIP says where the public IP shown in the client comes from.
+	PublicIP PublicIPSetting `json:"publicIP,omitzero"`
+}
+
+// Public IP sources.
+const (
+	// PublicIPServer is the address frps sees the client connect from.
+	PublicIPServer = "server"
+	// PublicIPAPI asks an external service such as api.ipify.org.
+	PublicIPAPI = "api"
+	// PublicIPOff hides the public IP.
+	PublicIPOff = "off"
+)
+
+// DefaultPublicIPAPI answers with the caller's IP in plain text.
+const DefaultPublicIPAPI = "https://api.ipify.org"
+
+// PublicIPSetting is where the public IP comes from.
+type PublicIPSetting struct {
+	Mode string `json:"mode,omitempty"`
+	URL  string `json:"url,omitempty"`
+}
+
+// Branding is the look the server's administrator chose.
+type Branding struct {
+	Version  int64  `json:"version"`
+	SiteName string `json:"siteName,omitempty"`
+	Accent   string `json:"accent,omitempty"`
+	// Logo is a data URL, or empty for the built-in mark.
+	Logo string `json:"logo,omitempty"`
+	// LogoBackdrop is "halo", "plate" or "none"; empty means "halo".
+	LogoBackdrop string `json:"logoBackdrop,omitempty"`
 }
 
 // Clone returns a deep copy.

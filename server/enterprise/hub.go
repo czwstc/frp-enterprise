@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -65,12 +66,16 @@ type Options struct {
 	SnapshotDebounce time.Duration
 	// Audit records client events. It may be nil.
 	Audit func(action, target, detail, ip string, ok bool)
+	// Branding returns the look sent to clients of EntCapsV2. It may be nil.
+	Branding func() *msg.EntBranding
 }
 
 type sessionEntry struct {
 	s    Session
 	code string
 	caps bool
+	// branding is set for clients that understand EntBranding.
+	branding bool
 }
 
 // Hub implements auth code login and pushes snapshots and notices to clients.
@@ -255,6 +260,9 @@ func (h *Hub) OnControlActive(s Session) {
 		code: enterprise.NormalizeAuthCode(login.Metas[msg.EntMetaAuthCode]),
 		caps: login.Metas[msg.EntMetaCaps] != "",
 	}
+	if v, err := strconv.Atoi(login.Metas[msg.EntMetaCaps]); err == nil && v >= 2 {
+		e.branding = true
+	}
 	h.mu.Lock()
 	h.sessions[s] = e
 	h.mu.Unlock()
@@ -273,6 +281,9 @@ func (h *Hub) OnControlActive(s Session) {
 		h.MarkDirty()
 	}()
 
+	if e.branding && h.opts.Branding != nil {
+		_ = s.SendMsg(h.opts.Branding())
+	}
 	if e.caps {
 		_ = s.SendMsg(h.buildSnapshot(e, h.opts.ListPorts()))
 		notices := h.store.Notices()
@@ -330,6 +341,19 @@ func (h *Hub) entries() []*sessionEntry {
 		out = append(out, e)
 	}
 	return out
+}
+
+// BroadcastBranding sends the look to every client that understands it.
+func (h *Hub) BroadcastBranding() {
+	if h.opts.Branding == nil {
+		return
+	}
+	m := h.opts.Branding()
+	for _, e := range h.entries() {
+		if e.branding {
+			_ = e.s.SendMsg(m)
+		}
+	}
 }
 
 // BroadcastSnapshot sends the current snapshot to every capable session.

@@ -109,6 +109,10 @@ type ServerEnterpriseConfig struct {
 	// StorePath is the JSON file holding auth codes and notices. By default,
 	// this value is "./frps_enterprise.json".
 	StorePath string `json:"storePath,omitempty"`
+	// BrandingPath is the JSON file holding the dashboard's and the clients'
+	// look, set on the dashboard's settings page. By default, this value is
+	// "./frps_branding.json".
+	BrandingPath string `json:"brandingPath,omitempty"`
 	// Admin replaces the dashboard's basic auth with user accounts: one local
 	// user protected by TOTP, and OIDC users approved by an administrator.
 	Admin AdminAuthConfig `json:"admin,omitempty"`
@@ -182,6 +186,7 @@ func (c *ServerConfig) Complete() error {
 	if c.Enterprise.Enabled {
 		c.Enterprise.StorePath = util.EmptyOr(c.Enterprise.StorePath, "./frps_enterprise.json")
 	}
+	c.Enterprise.BrandingPath = util.EmptyOr(c.Enterprise.BrandingPath, "./frps_branding.json")
 	if a := &c.Enterprise.Admin; a.Enabled {
 		a.StorePath = util.EmptyOr(a.StorePath, "./frps_admin.json")
 		a.AuditLogPath = util.EmptyOr(a.AuditLogPath, "./frps_audit.log")

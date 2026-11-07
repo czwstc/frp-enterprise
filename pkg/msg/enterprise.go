@@ -22,8 +22,10 @@ const (
 	// The server only sends EntSnapshot/EntNotice to clients that set it,
 	// because older clients drop the connection on unknown message types.
 	EntMetaCaps = "ent.caps"
-	// EntCapsV1 is the current value of EntMetaCaps.
+	// EntCapsV1 understands EntSnapshot and EntNotice.
 	EntCapsV1 = "1"
+	// EntCapsV2 also understands EntBranding.
+	EntCapsV2 = "2"
 )
 
 // Wire type identifiers for enterprise messages. They are kept far away from
@@ -31,9 +33,11 @@ const (
 const (
 	TypeEntSnapshot byte = 'E'
 	TypeEntNotice   byte = 'N'
+	TypeEntBranding byte = 'B'
 
 	V2TypeEntSnapshot uint16 = 1001
 	V2TypeEntNotice   uint16 = 1002
+	V2TypeEntBranding uint16 = 1003
 )
 
 // EntPort describes one port in use on the server.
@@ -63,4 +67,17 @@ type EntNotice struct {
 	Content string `json:"content,omitempty"`
 	// Time is a unix timestamp in seconds.
 	Time int64 `json:"time"`
+}
+
+// EntBranding is the look the administrator chose, for the desktop clients.
+// It is sent after login and whenever it changes, to clients of EntCapsV2.
+type EntBranding struct {
+	Version  int64  `json:"version"`
+	SiteName string `json:"site_name,omitempty"`
+	// Accent is a #rrggbb color.
+	Accent string `json:"accent,omitempty"`
+	// Logo is a data URL of a PNG, JPEG, WebP or SVG image, or empty.
+	Logo string `json:"logo,omitempty"`
+	// LogoBackdrop is "halo", "plate" or "none".
+	LogoBackdrop string `json:"logo_backdrop,omitempty"`
 }

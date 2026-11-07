@@ -2,166 +2,218 @@
   <div v-if="route.meta.public" id="app" class="bare">
     <router-view></router-view>
   </div>
-  <div v-else id="app">
-    <header class="header">
-      <div class="header-content">
-        <div class="brand-section">
-          <button
-            v-if="isMobile"
-            class="hamburger-btn"
-            @click="toggleSidebar"
-            aria-label="Toggle menu"
-          >
-            <span class="hamburger-icon">&#9776;</span>
-          </button>
-          <div class="logo-wrapper">
-            <LogoIcon class="logo-icon" />
-          </div>
-          <span class="divider">/</span>
-          <span class="brand-name">frp</span>
-          <span class="badge server-badge">Server</span>
-        </div>
+  <div v-else id="app" class="shell">
+    <div
+      v-if="isMobile && sidebarOpen"
+      class="overlay"
+      @click="sidebarOpen = false"
+    />
 
-        <div class="header-controls">
-          <el-dropdown v-if="session" trigger="click" @command="onUserCommand">
-            <span class="user-chip">
-              {{ session.username }}
-              <span class="user-source">{{
-                session.source === 'local' ? '本地' : 'SSO'
-              }}</span>
-            </span>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="logout">退出登录</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-          <a
-            class="github-link"
-            href="https://github.com/fatedier/frp"
-            target="_blank"
-            aria-label="GitHub"
-          >
-            <GitHubIcon class="github-icon" />
-          </a>
-          <el-switch
-            v-model="isDark"
-            inline-prompt
-            :active-icon="Moon"
-            :inactive-icon="Sunny"
-            class="theme-switch"
-          />
-        </div>
-      </div>
-    </header>
-
-    <div class="layout">
-      <!-- Mobile overlay -->
-      <div
-        v-if="isMobile && sidebarOpen"
-        class="sidebar-overlay"
-        @click="closeSidebar"
-      />
-
-      <aside
-        class="sidebar"
-        :class="{ 'mobile-open': isMobile && sidebarOpen }"
-      >
-        <nav class="sidebar-nav">
+    <aside class="side" :class="{ open: !isMobile || sidebarOpen }">
+      <router-link to="/" class="brand" @click="closeSidebar">
+        <BrandMark />
+      </router-link>
+      <nav class="groups">
+        <div v-for="group in nav" :key="group.label" class="group">
+          <div class="group-label">{{ group.label }}</div>
           <router-link
-            to="/"
-            class="sidebar-link"
-            :class="{ active: route.path === '/' }"
+            v-for="item in group.items"
+            :key="item.to"
+            :to="item.to"
+            class="item"
+            :class="{ on: isActive(item) }"
             @click="closeSidebar"
           >
-            Overview
-          </router-link>
-          <router-link
-            to="/clients"
-            class="sidebar-link"
-            :class="{ active: route.path.startsWith('/clients') }"
-            @click="closeSidebar"
-          >
-            Clients
-          </router-link>
-          <router-link
-            to="/proxies"
-            class="sidebar-link"
-            :class="{
-              active:
-                route.path.startsWith('/proxies') ||
-                route.path.startsWith('/proxy'),
-            }"
-            @click="closeSidebar"
-          >
-            Proxies
-          </router-link>
-          <router-link
-            to="/auth-codes"
-            class="sidebar-link"
-            :class="{ active: route.path.startsWith('/auth-codes') }"
-            @click="closeSidebar"
-          >
-            鉴权码
-            <span v-if="pendingCount > 0" class="sidebar-badge">{{
-              pendingCount
+            <SideIcon :name="item.icon" :color="`var(${item.color})`" />
+            <span class="label">{{ item.label }}</span>
+            <span v-if="item.alert" class="alert">{{ item.alert }}</span>
+            <span v-else-if="item.count !== undefined" class="count">{{
+              item.count
             }}</span>
           </router-link>
-          <router-link
-            to="/notices"
-            class="sidebar-link"
-            :class="{ active: route.path.startsWith('/notices') }"
-            @click="closeSidebar"
-          >
-            通知
-          </router-link>
-          <template v-if="authConfig?.enabled">
-            <router-link
-              to="/users"
-              class="sidebar-link"
-              :class="{ active: route.path.startsWith('/users') }"
-              @click="closeSidebar"
-            >
-              用户
-              <span v-if="pendingUsers > 0" class="sidebar-badge">{{
-                pendingUsers
-              }}</span>
-            </router-link>
-            <router-link
-              to="/logs"
-              class="sidebar-link"
-              :class="{ active: route.path.startsWith('/logs') }"
-              @click="closeSidebar"
-            >
-              日志
-            </router-link>
-          </template>
-        </nav>
-      </aside>
+        </div>
+      </nav>
+      <div class="side-foot">
+        <div>{{ versionText }}</div>
+        <div v-if="authConfig?.enabled">审计日志已开启</div>
+      </div>
+    </aside>
 
-      <main id="content">
+    <main id="content">
+      <header class="topbar">
+        <button
+          v-if="isMobile"
+          class="hamburger"
+          aria-label="打开菜单"
+          @click="sidebarOpen = !sidebarOpen"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+          >
+            <path d="M2 4h12M2 8h12M2 12h12" />
+          </svg>
+        </button>
+        <div class="title-block">
+          <div class="page-name">{{ pageTitle }}</div>
+        </div>
+        <div class="spacer"></div>
+        <TopLink :link="branding.topLink" />
+        <el-dropdown v-if="session" trigger="click" @command="onUserCommand">
+          <span class="user-chip">
+            <span class="avatar">{{
+              session.username.slice(0, 1).toUpperCase()
+            }}</span>
+            {{ session.username }}
+            <small>{{ session.source === 'local' ? '本地' : 'SSO' }}</small>
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </header>
+      <div class="page">
         <router-view></router-view>
-      </main>
-    </div>
+      </div>
+    </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useDark } from '@vueuse/core'
-import { Moon, Sunny } from '@element-plus/icons-vue'
-import GitHubIcon from './assets/icons/github.svg?component'
-import LogoIcon from './assets/icons/logo.svg?component'
+import BrandMark from './components/pulse/BrandMark.vue'
+import SideIcon from './components/pulse/SideIcon.vue'
+import TopLink from './components/pulse/TopLink.vue'
 import { useResponsive } from './composables/useResponsive'
+import { useBranding } from './composables/useBranding'
+import { useAuth } from './composables/useAuth'
 import { getEnterpriseStatus } from './api/enterprise'
+import { getServerInfo } from './api/server'
 import { listUsers, logout } from './api/auth'
 import { setUnauthorizedHandler } from './api/http'
-import { useAuth } from './composables/useAuth'
+
+interface NavItem {
+  to: string
+  label: string
+  icon: string
+  color: string
+  count?: number
+  alert?: number
+  match?: string[]
+}
 
 const route = useRoute()
 const router = useRouter()
+const { isMobile } = useResponsive()
+const { branding, load: loadBranding } = useBranding()
 const { config: authConfig, session } = useAuth()
+
+const sidebarOpen = ref(false)
+const closeSidebar = () => {
+  if (isMobile.value) sidebarOpen.value = false
+}
+
+const clients = ref<number | undefined>()
+const proxies = ref<number | undefined>()
+const pendingCodes = ref(0)
+const pendingUsers = ref(0)
+const version = ref('')
+
+const nav = computed<{ label: string; items: NavItem[] }[]>(() => {
+  const groups: { label: string; items: NavItem[] }[] = [
+    {
+      label: '监控',
+      items: [
+        { to: '/', label: '概览', icon: 'home', color: '--pulse-blue' },
+        {
+          to: '/clients',
+          label: '客户端',
+          icon: 'monitor',
+          color: '--pulse-blue',
+          count: clients.value,
+        },
+        {
+          to: '/proxies',
+          label: '代理',
+          icon: 'link',
+          color: '--pulse-green',
+          count: proxies.value,
+          match: ['/proxies', '/proxy'],
+        },
+      ],
+    },
+    {
+      label: '管理',
+      items: [
+        {
+          to: '/auth-codes',
+          label: '鉴权码',
+          icon: 'key',
+          color: '--pulse-violet',
+          alert: pendingCodes.value || undefined,
+        },
+        { to: '/notices', label: '通知', icon: 'bell', color: '--pulse-amber' },
+        ...(authConfig.value?.enabled
+          ? [
+              {
+                to: '/users',
+                label: '用户',
+                icon: 'users',
+                color: '--pulse-teal',
+                alert: pendingUsers.value || undefined,
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      label: '系统',
+      items: [
+        ...(authConfig.value?.enabled
+          ? [
+              {
+                to: '/logs',
+                label: '日志',
+                icon: 'list',
+                color: '--pulse-orange',
+              },
+            ]
+          : []),
+        {
+          to: '/server',
+          label: '服务端信息',
+          icon: 'server',
+          color: '--pulse-pink',
+        },
+        {
+          to: '/preferences',
+          label: '设置',
+          icon: 'gear',
+          color: '--pulse-gray',
+        },
+      ],
+    },
+  ]
+  return groups
+})
+
+const isActive = (item: NavItem) => {
+  if (item.to === '/') return route.path === '/'
+  return (item.match || [item.to]).some((p) => route.path.startsWith(p))
+}
+
+const pageTitle = computed(
+  () => (route.meta.title as string) || branding.value.siteName,
+)
+const versionText = computed(() =>
+  version.value ? `frps ${version.value} · 企业版` : 'frps 企业版',
+)
 
 // A request answered 401 means the session has ended: go to the login page.
 setUnauthorizedHandler(() => {
@@ -172,32 +224,35 @@ setUnauthorizedHandler(() => {
 })
 
 const onUserCommand = async (cmd: string) => {
-  if (cmd === 'logout') {
-    try {
-      await logout()
-    } catch {
-      // The session is gone either way.
-    }
-    session.value = null
-    router.replace('/login')
+  if (cmd !== 'logout') return
+  try {
+    await logout()
+  } catch {
+    // The session is gone either way.
   }
+  session.value = null
+  router.replace('/login')
 }
-const isDark = useDark()
-const { isMobile } = useResponsive()
 
-const sidebarOpen = ref(false)
-
-// Auth codes waiting for approval, shown beside the sidebar link.
-const pendingCount = ref(0)
-let pendingTimer: number | null = null
-const pendingUsers = ref(0)
-const fetchPending = async () => {
+let timer: number | null = null
+const refreshCounts = async () => {
   if (route.meta.public) return
   try {
-    const status = await getEnterpriseStatus()
-    pendingCount.value = status.enabled ? status.pending : 0
+    const info = await getServerInfo()
+    version.value = info.version
+    clients.value = info.status.clientCounts
+    proxies.value = Object.values(info.status.proxyTypeCount || {}).reduce(
+      (a, b) => a + b,
+      0,
+    )
   } catch {
-    pendingCount.value = 0
+    // Counts are optional.
+  }
+  try {
+    const status = await getEnterpriseStatus()
+    pendingCodes.value = status.enabled ? status.pending : 0
+  } catch {
+    pendingCodes.value = 0
   }
   if (authConfig.value?.enabled) {
     try {
@@ -210,458 +265,224 @@ const fetchPending = async () => {
     }
   }
 }
-onMounted(() => {
-  fetchPending()
-  pendingTimer = window.setInterval(fetchPending, 5000)
-})
-onUnmounted(() => {
-  if (pendingTimer !== null) window.clearInterval(pendingTimer)
-})
 
-const toggleSidebar = () => {
-  sidebarOpen.value = !sidebarOpen.value
-}
-
-const closeSidebar = () => {
-  sidebarOpen.value = false
-}
-
-// Auto-close sidebar on route change
 watch(
   () => route.path,
   () => {
-    if (isMobile.value) {
-      closeSidebar()
-    }
+    closeSidebar()
+    refreshCounts()
   },
 )
+
+onMounted(() => {
+  loadBranding()
+  refreshCounts()
+  timer = window.setInterval(refreshCounts, 5000)
+})
+onUnmounted(() => {
+  if (timer !== null) window.clearInterval(timer)
+})
 </script>
 
 <style>
-:root {
-  --header-height: 50px;
-  --sidebar-width: 200px;
-  --header-bg: #ffffff;
-  --header-border: #e4e7ed;
-  --sidebar-bg: #ffffff;
-  --text-primary: #303133;
-  --text-secondary: #606266;
-  --text-muted: #909399;
-  --hover-bg: #efefef;
-  --content-bg: #f9f9f9;
-}
-
-html.dark {
-  --header-bg: #1e1e2e;
-  --header-border: #3a3d5c;
-  --sidebar-bg: #1e1e2e;
-  --text-primary: #e5e7eb;
-  --text-secondary: #b0b0b0;
-  --text-muted: #888888;
-  --hover-bg: #2a2a3e;
-  --content-bg: #181825;
-}
-
+html,
 body {
+  height: 100%;
   margin: 0;
-  font-family:
-    ui-sans-serif,
-    -apple-system,
-    system-ui,
-    Segoe UI,
-    Helvetica,
-    Arial,
-    sans-serif;
+  overflow: hidden;
 }
-
 *,
 :after,
 :before {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
 }
-
-html,
-body {
-  height: 100%;
-  overflow: hidden;
-}
-
 #app {
   height: 100vh;
   height: 100dvh;
+  background: var(--pulse-canvas);
+  color: var(--el-text-color-primary);
+}
+#app.bare {
+  overflow: auto;
+}
+</style>
+
+<style scoped>
+.shell {
+  display: grid;
+  grid-template-columns: 228px minmax(0, 1fr);
+}
+.side {
+  background: var(--pulse-side);
+  border-right: 1px solid var(--pulse-line);
+  padding: 12px 10px;
   display: flex;
   flex-direction: column;
-  background-color: var(--content-bg);
+  gap: 14px;
+  overflow-y: auto;
+  min-height: 0;
 }
-
-/* Header */
-.header {
-  flex-shrink: 0;
-  background: var(--header-bg);
-  border-bottom: 1px solid var(--header-border);
-  height: var(--header-height);
-}
-
-.header-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 100%;
-  padding: 0 20px;
-}
-
-.brand-section {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.logo-wrapper {
-  display: flex;
-  align-items: center;
-}
-
-.logo-icon {
-  width: 28px;
-  height: 28px;
-}
-
-.divider {
-  color: var(--header-border);
-  font-size: 22px;
-  font-weight: 200;
-}
-
-.brand-name {
-  font-weight: 600;
-  font-size: 18px;
-  color: var(--text-primary);
-  letter-spacing: -0.5px;
-}
-
-.badge {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-muted);
-  background: var(--hover-bg);
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.badge.server-badge {
-  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
-  color: white;
-  border: none;
-  font-weight: 500;
-}
-
-html.dark .badge.server-badge {
-  background: linear-gradient(135deg, #60a5fa 0%, #22d3ee 100%);
-}
-
-.header-controls {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.github-link {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  color: var(--text-secondary);
-  transition: all 0.15s ease;
+.brand {
+  display: block;
+  padding: 6px 6px 4px;
   text-decoration: none;
+  min-height: 36px;
 }
-
-.github-link:hover {
-  background: var(--hover-bg);
-  color: var(--text-primary);
+.groups {
+  display: grid;
+  gap: 14px;
 }
-
-.github-icon {
-  width: 18px;
-  height: 18px;
+.group {
+  display: grid;
+  gap: 1px;
 }
-
-.theme-switch {
-  --el-switch-on-color: #2c2c3a;
-  --el-switch-off-color: #f2f2f2;
-  --el-switch-border-color: var(--header-border);
+.group-label {
+  font-size: 11px;
+  color: var(--el-text-color-placeholder);
+  font-weight: 600;
+  padding: 4px 8px;
+  letter-spacing: 0.03em;
 }
-
-html.dark .theme-switch {
-  --el-switch-off-color: #333;
-}
-
-.theme-switch .el-switch__core .el-switch__inner .el-icon {
-  color: #909399 !important;
-}
-
-/* Layout */
-.layout {
-  flex: 1;
+.item {
   display: flex;
-  overflow: hidden;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  color: var(--el-text-color-primary);
+  text-decoration: none;
+  font-size: 13px;
 }
-
-/* Sidebar */
-.sidebar {
-  width: var(--sidebar-width);
-  flex-shrink: 0;
-  background: var(--sidebar-bg);
-  border-right: 1px solid var(--header-border);
-  padding: 16px 12px;
+.item:hover {
+  background: var(--pulse-side-hover);
+}
+.item.on {
+  background: var(--accent);
+  color: #fff;
+}
+.item.on .count {
+  color: rgba(255, 255, 255, 0.85);
+}
+.label {
+  flex: 1;
+  min-width: 0;
+}
+.count {
+  font-size: 11.5px;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.alert {
+  background: var(--pulse-red);
+  color: #fff;
+  border-radius: 9px;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 17px;
+  font-weight: 600;
+}
+.side-foot {
+  margin-top: auto;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
+  border-top: 1px solid var(--pulse-line);
+}
+#content {
+  min-width: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
-
-.sidebar-nav {
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  background: color-mix(in srgb, var(--pulse-canvas) 88%, transparent);
+  backdrop-filter: blur(10px);
 }
-
-.sidebar-link {
-  display: block;
-  text-decoration: none;
-  font-size: 15px;
-  color: var(--text-secondary);
-  padding: 10px 12px;
-  border-radius: 6px;
-  transition: all 0.15s ease;
+.page-name {
+  font-size: 17px;
+  font-weight: 650;
 }
-
-.sidebar-link:hover {
-  color: var(--text-primary);
-  background: var(--hover-bg);
+.spacer {
+  flex: 1;
 }
-
-.sidebar-link.active {
-  color: var(--text-primary);
-  background: var(--hover-bg);
-  font-weight: 500;
-}
-
 .user-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  border-radius: 14px;
-  font-size: 13px;
-  color: var(--text-primary);
-  background: var(--hover-bg);
+  padding: 4px 10px 4px 4px;
+  border-radius: 16px;
+  background: var(--pulse-side);
+  font-size: 12.5px;
+  color: var(--el-text-color-primary);
   cursor: pointer;
 }
-
-.user-source {
+.user-chip small {
+  color: var(--el-text-color-secondary);
   font-size: 11px;
-  color: var(--text-muted);
 }
-
-.sidebar-badge {
-  display: inline-block;
-  min-width: 18px;
-  padding: 0 6px;
-  margin-left: 6px;
-  border-radius: 9px;
-  background: var(--el-color-danger);
+.avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
   color: #fff;
-  font-size: 12px;
-  line-height: 18px;
-  text-align: center;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 600;
 }
-
-/* Hamburger button (mobile only) */
-.hamburger-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
-  border-radius: 6px;
+.page {
+  padding: 4px 24px 32px;
+  min-width: 0;
+}
+.hamburger {
+  border: 0;
   background: transparent;
+  color: var(--el-text-color-primary);
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
   cursor: pointer;
-  padding: 0;
-  transition: background 0.15s ease;
 }
-
-.hamburger-btn:hover {
-  background: var(--hover-bg);
+.hamburger svg {
+  width: 18px;
+  height: 18px;
 }
-
-.hamburger-icon {
-  font-size: 20px;
-  line-height: 1;
-  color: var(--text-primary);
-}
-
-/* Mobile overlay */
-.sidebar-overlay {
+.overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 99;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 19;
 }
-
-/* Content */
-#content {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  padding: 40px;
-}
-
-#content > * {
-  max-width: 1024px;
-  margin: 0 auto;
-}
-
-/* Common page styles */
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-text-primary, var(--text-primary));
-  margin: 0;
-}
-
-.page-subtitle {
-  font-size: 14px;
-  color: var(--color-text-muted, var(--text-muted));
-  margin: 8px 0 0;
-}
-
-/* Element Plus global overrides */
-.el-button {
-  font-weight: 500;
-}
-
-.el-tag {
-  font-weight: 500;
-}
-
-.el-switch {
-  --el-switch-on-color: #606266;
-  --el-switch-off-color: #dcdfe6;
-}
-
-html.dark .el-switch {
-  --el-switch-on-color: #b0b0b0;
-  --el-switch-off-color: #3a3d5c;
-}
-
-.el-form-item {
-  margin-bottom: 16px;
-}
-
-.el-loading-mask {
-  border-radius: 8px;
-}
-
-/* Select overrides */
-.el-select__wrapper {
-  border-radius: 8px !important;
-  box-shadow: 0 0 0 1px var(--color-border-light, #e4e7ed) inset !important;
-  transition: all 0.15s ease;
-}
-
-.el-select__wrapper:hover {
-  box-shadow: 0 0 0 1px var(--color-border, #dcdfe6) inset !important;
-}
-
-.el-select__wrapper.is-focused {
-  box-shadow: 0 0 0 1px var(--color-border, #dcdfe6) inset !important;
-}
-
-.el-select-dropdown {
-  border-radius: 12px !important;
-  border: 1px solid var(--color-border-light, #e4e7ed) !important;
-  box-shadow:
-    0 10px 25px -5px rgba(0, 0, 0, 0.1),
-    0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
-  padding: 4px !important;
-}
-
-.el-select-dropdown__item {
-  border-radius: 6px;
-  margin: 2px 0;
-  transition: background 0.15s ease;
-}
-
-.el-select-dropdown__item.is-selected {
-  color: var(--color-text-primary, var(--text-primary));
-  font-weight: 500;
-}
-
-/* Input overrides */
-.el-input__wrapper {
-  border-radius: 8px !important;
-  box-shadow: 0 0 0 1px var(--color-border-light, #e4e7ed) inset !important;
-  transition: all 0.15s ease;
-}
-
-.el-input__wrapper:hover {
-  box-shadow: 0 0 0 1px var(--color-border, #dcdfe6) inset !important;
-}
-
-.el-input__wrapper.is-focus {
-  box-shadow: 0 0 0 1px var(--color-border, #dcdfe6) inset !important;
-}
-
-/* Card overrides */
-.el-card {
-  border-radius: 12px;
-  border: 1px solid var(--color-border-light, #e4e7ed);
-  transition: all 0.2s ease;
-}
-
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #d1d1d1;
-  border-radius: 3px;
-}
-
-/* Mobile */
 @media (max-width: 767px) {
-  .header-content {
-    padding: 0 16px;
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
   }
-
-  .sidebar {
+  .side {
     position: fixed;
-    top: var(--header-height);
-    left: 0;
-    bottom: 0;
-    z-index: 100;
-    background: var(--sidebar-bg);
+    inset: 0 auto 0 0;
+    width: 240px;
+    z-index: 20;
     transform: translateX(-100%);
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    border-right: 1px solid var(--header-border);
+    transition: transform 0.2s;
   }
-
-  .sidebar.mobile-open {
-    transform: translateX(0);
+  .side.open {
+    transform: none;
   }
-
-  #content {
-    width: 100%;
-    padding: 20px;
+  .topbar,
+  .page {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 }
 </style>

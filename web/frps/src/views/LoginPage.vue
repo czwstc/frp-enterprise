@@ -2,11 +2,7 @@
   <div class="login-page">
     <div class="login-card">
       <div class="brand">
-        <LogoIcon class="logo" />
-        <div>
-          <div class="title">frp 企业版</div>
-          <div class="subtitle">服务端控制台</div>
-        </div>
+        <BrandMark />
       </div>
 
       <el-alert
@@ -170,7 +166,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import QRCode from 'qrcode'
-import LogoIcon from '../assets/icons/logo.svg?component'
+import BrandMark from '../components/pulse/BrandMark.vue'
 import { confirmEnroll, login } from '../api/auth'
 import type { LoginResult } from '../api/auth'
 import { useAuth } from '../composables/useAuth'
@@ -333,7 +329,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: var(--content-bg);
+  background: var(--pulse-canvas);
 }
 
 .login-card {
@@ -341,8 +337,8 @@ onMounted(async () => {
   max-width: 400px;
   padding: 32px;
   border-radius: 12px;
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--pulse-card);
+  border: 1px solid var(--pulse-line);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
 }
 

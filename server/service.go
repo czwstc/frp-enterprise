@@ -57,6 +57,7 @@ import (
 	"github.com/fatedier/frp/pkg/util/xlog"
 	"github.com/fatedier/frp/server/adminauth"
 	"github.com/fatedier/frp/server/audit"
+	"github.com/fatedier/frp/server/branding"
 	"github.com/fatedier/frp/server/controller"
 	"github.com/fatedier/frp/server/enterprise"
 	"github.com/fatedier/frp/server/group"
@@ -118,6 +119,8 @@ type Service struct {
 
 	// Enterprise auth code login, nil when disabled.
 	entHub *enterprise.Hub
+	// The look of the dashboard and the clients.
+	branding *branding.Store
 	// Dashboard accounts and the audit log, nil when disabled.
 	adminAuth *adminauth.Service
 	auditLog  *audit.Logger
@@ -203,6 +206,10 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 		log.Infof("tcpmux httpconnect multiplexer listen on %s, passthrough: %v", address, cfg.TCPMuxPassthrough)
 	}
 
+	svr.branding, err = branding.Open(cfg.Enterprise.BrandingPath)
+	if err != nil {
+		return nil, fmt.Errorf("open branding error: %v", err)
+	}
 	if cfg.Enterprise.Admin.Enabled {
 		svr.auditLog, err = audit.Open(cfg.Enterprise.Admin.AuditLogPath)
 		if err != nil {
@@ -217,6 +224,7 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 	if cfg.Enterprise.Enabled {
 		svr.entHub, err = enterprise.NewHub(enterprise.Options{
 			Audit:      svr.recordAudit,
+			Branding:   svr.clientBranding,
 			StorePath:  cfg.Enterprise.StorePath,
 			AllowPorts: types.PortsRangeSlice(cfg.AllowPorts).String(),
 			ListPorts:  svr.listEnterprisePorts,
@@ -224,6 +232,7 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 		if err != nil {
 			return nil, fmt.Errorf("create enterprise hub error: %v", err)
 		}
+		svr.branding.OnChange(func(branding.Settings) { svr.entHub.BroadcastBranding() })
 		log.Infof("enterprise auth code login enabled, store [%s]", cfg.Enterprise.StorePath)
 	}
 
@@ -1087,4 +1096,10 @@ func (svr *Service) listEnterprisePorts() []enterprise.PortUse {
 // recordAudit records an event frps did on its own.
 func (svr *Service) recordAudit(action, target, detail, ip string, ok bool) {
 	svr.auditLog.Record(audit.Entry{Action: action, Target: target, Detail: detail, IP: ip, Success: ok})
+}
+
+// clientBranding is the look sent to the desktop clients.
+func (svr *Service) clientBranding() *msg.EntBranding {
+	b := svr.branding.Get()
+	return &msg.EntBranding{Version: b.Version, SiteName: b.SiteName, Accent: b.Accent, Logo: b.Logo, LogoBackdrop: b.LogoBackdrop}
 }

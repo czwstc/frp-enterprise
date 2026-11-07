@@ -67,6 +67,7 @@ var v2MsgTypeMap = map[uint16]any{
 	V2TypeNatHoleReport:      NatHoleReport{},
 	V2TypeEntSnapshot:        EntSnapshot{},
 	V2TypeEntNotice:          EntNotice{},
+	V2TypeEntBranding:        EntBranding{},
 }
 
 var v2MsgReflectTypeMap, v2MsgTypeIDMap = buildV2MsgTypeMaps()

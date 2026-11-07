@@ -30,6 +30,10 @@ import (
 func (svr *Service) registerRouteHandlers(helper *httppkg.RouterRegisterHelper) {
 	helper.Router.HandleFunc("/healthz", healthz)
 
+	brandingController := adminapi.NewBrandingController(svr.branding, svr.auditDashboard)
+	// The login page shows the branding before anyone signs in.
+	helper.Router.HandleFunc("/api/branding", httppkg.MakeHTTPHandlerFuncV2(brandingController.APIGet)).Methods("GET")
+
 	// With dashboard accounts, the session middleware replaces basic auth and
 	// the pages load without a session, to show the login page.
 	authMiddleware := helper.AuthMiddleware
@@ -65,6 +69,8 @@ func (svr *Service) registerRouteHandlers(helper *httppkg.RouterRegisterHelper) 
 	subRouter.HandleFunc("/api/clients", httppkg.MakeHTTPHandlerFunc(apiController.APIClientList)).Methods("GET")
 	subRouter.HandleFunc("/api/clients/{key}", httppkg.MakeHTTPHandlerFunc(apiController.APIClientDetail)).Methods("GET")
 	subRouter.HandleFunc("/api/proxies", httppkg.MakeHTTPHandlerFunc(apiController.DeleteProxies)).Methods("DELETE")
+
+	subRouter.HandleFunc("/api/branding", httppkg.MakeHTTPHandlerFuncV2(brandingController.APIUpdate)).Methods("PUT")
 
 	entController := adminapi.NewEnterpriseController(svr.entHub, svr.auditDashboard)
 	subRouter.HandleFunc("/api/enterprise/status", httppkg.MakeHTTPHandlerFuncV2(entController.APIStatus)).Methods("GET")

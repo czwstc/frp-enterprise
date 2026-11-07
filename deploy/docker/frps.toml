@@ -15,6 +15,8 @@ webServer.port = 7500
 # Per-device auth codes approved in the dashboard.
 enterprise.enabled = true
 enterprise.storePath = "/data/frps_enterprise.json"
+# Name, logo, theme and top right link, set on the dashboard's settings page.
+enterprise.brandingPath = "/data/frps_branding.json"
 
 # Dashboard accounts: one local user with TOTP + recovery keys, the rest
 # through OIDC, matched by user name and approved by another administrator.

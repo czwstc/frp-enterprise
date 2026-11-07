@@ -40,7 +40,7 @@ func main() {
 
 	mygo.App.WhenReady(func() {
 		win := mygo.NewWindow(mygo.WindowOptions{
-			Title:     "FRP 企业客户端",
+			Title:     AppName,
 			Width:     920,
 			Height:    640,
 			MinWidth:  720,

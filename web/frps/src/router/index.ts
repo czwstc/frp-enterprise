@@ -9,6 +9,8 @@ import ServerNotices from '../views/ServerNotices.vue'
 import LoginPage from '../views/LoginPage.vue'
 import AdminUsers from '../views/AdminUsers.vue'
 import AdminLogs from '../views/AdminLogs.vue'
+import EnterpriseOverview from '../views/EnterpriseOverview.vue'
+import SiteSettings from '../views/SiteSettings.vue'
 import { useAuth } from '../composables/useAuth'
 
 const router = createRouter({
@@ -19,56 +21,75 @@ const router = createRouter({
   routes: [
     {
       path: '/',
+      name: 'Overview',
+      component: EnterpriseOverview,
+      meta: { title: '概览' },
+    },
+    {
+      path: '/server',
       name: 'ServerOverview',
       component: ServerOverview,
+      meta: { title: '服务端信息' },
+    },
+    {
+      path: '/preferences',
+      name: 'Preferences',
+      component: SiteSettings,
+      meta: { title: '设置' },
     },
     {
       path: '/clients',
       name: 'Clients',
       component: Clients,
+      meta: { title: '客户端' },
     },
     {
       path: '/clients/:key',
       name: 'ClientDetail',
       component: ClientDetail,
+      meta: { title: '客户端详情' },
     },
     {
       path: '/proxies/:type?',
       name: 'Proxies',
       component: Proxies,
+      meta: { title: '代理' },
     },
     {
       path: '/proxy/:name',
       name: 'ProxyDetail',
       component: ProxyDetail,
+      meta: { title: '代理详情' },
     },
     {
       path: '/auth-codes',
       name: 'AuthCodes',
       component: AuthCodes,
+      meta: { title: '鉴权码' },
     },
     {
       path: '/notices',
       name: 'Notices',
       component: ServerNotices,
+      meta: { title: '通知' },
     },
     {
       path: '/login',
       name: 'Login',
       component: LoginPage,
-      meta: { public: true },
+      meta: { title: '登录', public: true },
     },
     {
       path: '/users',
       name: 'Users',
       component: AdminUsers,
-      meta: { accounts: true },
+      meta: { title: '用户', accounts: true },
     },
     {
       path: '/logs',
       name: 'Logs',
       component: AdminLogs,
-      meta: { accounts: true },
+      meta: { title: '日志', accounts: true },
     },
   ],
 })

@@ -1,0 +1,111 @@
+/* Pulse look: a source-list sidebar beside a light canvas of white cards.
+   The accent (--accent, --el-color-primary) is set from the branding. */
+:root {
+  --accent: #1f5eff;
+  --accent-soft: #e8efff;
+  --pulse-canvas: #f6f7f9;
+  --pulse-side: #eef0f3;
+  --pulse-side-hover: #e2e5ea;
+  --pulse-card: #ffffff;
+  --pulse-line: #e4e7ec;
+  --pulse-dot-off: #e7eaf0;
+  --pulse-shadow: 0 1px 2px rgba(20, 28, 45, 0.05);
+  --pulse-blue: #2f6bff;
+  --pulse-green: #22a35a;
+  --pulse-pink: #e5487c;
+  --pulse-orange: #ef7d22;
+  --pulse-teal: #11a3a8;
+  --pulse-violet: #7b5cf0;
+  --pulse-amber: #d99a0b;
+  --pulse-red: #e0443e;
+  --pulse-gray: #8a919e;
+  --el-border-radius-base: 8px;
+  --el-border-color-lighter: var(--pulse-line);
+  --el-font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+}
+
+html.dark {
+  --accent-soft: #1d2a4a;
+  --pulse-canvas: #111317;
+  --pulse-side: #1b1e24;
+  --pulse-side-hover: #262a32;
+  --pulse-card: #1a1d23;
+  --pulse-line: #2a2e37;
+  --pulse-dot-off: #262a33;
+  --pulse-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --pulse-blue: #5b8cff;
+  --pulse-green: #3cc47a;
+  --pulse-pink: #f06b98;
+  --pulse-orange: #f59a4a;
+  --pulse-teal: #2cc5c9;
+  --pulse-violet: #9b85ff;
+  --pulse-amber: #f0b93a;
+  --pulse-red: #f26b65;
+  --pulse-gray: #6b7280;
+  --el-bg-color: #1a1d23;
+  --el-bg-color-page: #111317;
+  --el-bg-color-overlay: #20242b;
+  --el-fill-color-blank: #1a1d23;
+  --el-fill-color-light: #20242b;
+  --el-border-color: #333844;
+  --el-border-color-light: #2d313b;
+  --el-border-color-lighter: #2a2e37;
+  --el-text-color-primary: #e8eaee;
+  --el-text-color-regular: #c5cad3;
+  --el-text-color-secondary: #9aa1ad;
+  background-color: #111317;
+}
+
+body {
+  font-family: var(--el-font-family);
+  font-size: 13px;
+}
+
+/* Element Plus in the Pulse look */
+.el-card {
+  border-radius: 12px !important;
+  border-color: var(--pulse-line) !important;
+  background: var(--pulse-card) !important;
+  box-shadow: var(--pulse-shadow) !important;
+}
+.el-card__header {
+  padding: 12px 16px !important;
+  font-weight: 600;
+  font-size: 13px;
+  border-bottom-color: var(--pulse-line) !important;
+}
+.el-table {
+  --el-table-header-bg-color: var(--pulse-side);
+  --el-table-border-color: var(--pulse-line);
+  --el-table-bg-color: var(--pulse-card);
+  --el-table-tr-bg-color: var(--pulse-card);
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 12.5px;
+}
+.el-table th.el-table__cell {
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+}
+.el-button {
+  border-radius: 8px;
+}
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner {
+  border-radius: 8px !important;
+}
+.el-tag {
+  border-radius: 10px;
+}
+
+/* The top bar names the page, so the pages' own headings are hidden,
+   including those of the original frp pages. */
+#content .page .page-title {
+  display: none !important;
+}
+#content .page-subtitle {
+  font-size: 12.5px !important;
+}

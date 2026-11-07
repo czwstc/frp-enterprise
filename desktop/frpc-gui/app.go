@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ type backend interface {
 	VerifyPassword(pw string) bool
 	SetLockPassword(current, pw string) error
 	DisableLock(current string) error
+	SetPublicIPSource(mode, url string) error
 }
 
 // managerBackend adapts *enterprise.Manager to backend.
@@ -53,6 +55,7 @@ const (
 	tabNotices
 	tabLogs
 	tabSecurity
+	tabPrefs
 )
 
 // app is the state the window shows. All fields are read and written on the
@@ -101,6 +104,21 @@ type app struct {
 	seenNotices map[string]bool
 	toasts      []string
 
+	// logo is the server's logo; history the connection state over time
+	// (1 running, 0.5 connecting or pending, 0.15 otherwise), one per refresh.
+	logo    brandLogo
+	history []float32
+
+	// localIP is the local address chosen in the overview's drop-down.
+	localIP string
+
+	// preferences page
+	ipMode    int // 0 server, 1 api, 2 off
+	ipURL     string
+	prefsMsg  string
+	prefsErr  string
+	prefsInit bool
+
 	actionErr string
 }
 
@@ -133,6 +151,27 @@ func (a *app) fillLoginForm() {
 func (a *app) refresh() {
 	a.settings = a.be.Settings()
 	a.status = a.be.Status()
+	a.logo.update(a.status.Branding.Logo, a.status.Branding.LogoBackdrop)
+	level := float32(0.15)
+	switch a.status.State {
+	case enterprise.StateRunning:
+		level = 1
+	case enterprise.StateConnecting, enterprise.StatePending:
+		level = 0.5
+	}
+	if !slices.Contains(a.status.LocalIPs, a.localIP) {
+		a.localIP = ""
+		if len(a.status.LocalIPs) > 0 {
+			a.localIP = a.status.LocalIPs[0]
+		}
+	}
+	if !a.prefsInit {
+		a.loadPrefsForm()
+	}
+	a.history = append(a.history, level)
+	if len(a.history) > 240 {
+		a.history = a.history[len(a.history)-240:]
+	}
 	logs := a.be.Logs()
 	if len(logs) == 0 || len(a.logs) == 0 || logs[len(logs)-1].Seq != a.logSeq || len(logs) != len(a.logs) {
 		a.logs = logs
@@ -154,6 +193,7 @@ func (a *app) refresh() {
 }
 
 func (a *app) view(c *ui.Context) {
+	p := applyTheme(c, a.status.Branding.Accent)
 	// A locked window shows nothing of the notices.
 	if !a.locked {
 		for _, t := range a.toasts {
@@ -164,11 +204,11 @@ func (a *app) view(c *ui.Context) {
 
 	switch {
 	case a.locked:
-		a.lockedView(c)
+		a.lockedView(c, p)
 	case a.page == pageLogin:
-		a.loginView(c)
+		a.loginView(c, p)
 	default:
-		a.mainView(c)
+		a.mainView(c, p)
 	}
 }
 
@@ -186,8 +226,7 @@ func stateColor(t *ui.Theme, s enterprise.State) ui.Color {
 }
 
 func stateBadge(c *ui.Context, s enterprise.State) {
-	t := c.Theme()
-	ui.Badge(c, s.Label()).Background(stateColor(t, s)).TextColor(ui.RGB(255, 255, 255))
+	tag(c, s.Label(), stateColor(c.Theme(), s))
 }
 
 func formatDuration(d time.Duration) string {
