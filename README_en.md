@@ -61,7 +61,11 @@ docker compose up -d
    enterprise.authCode = "XXXX-XXXX-XXXX-XXXX"
    ```
 
-See [deploy/docker/README.md](deploy/docker/README.md) for deployment details and [conf/frps_full_example.toml](conf/frps_full_example.toml) for every option.
+The Chinese [README](README.md#docker-部署指南) has the full Docker deployment guide: preparation, `.env`, pulling from GHCR, HTTPS reverse proxy (Caddy and Nginx), changing the port range, upgrades, backups and troubleshooting. See also [deploy/docker/README.md](deploy/docker/README.md) and [conf/frps_full_example.toml](conf/frps_full_example.toml) for every option.
+
+## Desktop client downloads
+
+Get HDIT-FRPE-Client for macOS (universal `.dmg`), Windows x64 (`.zip`) and Linux x64/ARM64 (`.deb`, `.tar.gz`) from [Releases](https://github.com/czwstc/frp-enterprise/releases). The builds are not code-signed yet: on macOS open the app with right-click → Open the first time.
 
 ## Building
 

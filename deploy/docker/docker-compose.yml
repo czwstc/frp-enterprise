@@ -1,6 +1,6 @@
 services:
   frps:
-    image: ${FRPS_IMAGE:-ghcr.io/czwstc/frps-enterprise:latest}
+    image: ${FRPS_IMAGE:-ghcr.io/czwstc/frps-enterprise:edge}
     container_name: frps
     restart: unless-stopped
     env_file: .env

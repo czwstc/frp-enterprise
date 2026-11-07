@@ -20,6 +20,7 @@
 - [功能特性](#功能特性)
 - [架构](#架构)
 - [快速开始](#快速开始)
+- [Docker 部署指南](#docker-部署指南)
 - [客户端](#客户端)
 - [服务端控制台](#服务端控制台)
 - [配置参考](#配置参考)
@@ -159,7 +160,162 @@ localPort = 3389
 remotePort = 6001
 ```
 
+## Docker 部署指南
+
+### 准备
+
+- 一台能被员工电脑访问到的 Linux 服务器（公网或公司内网均可），已安装 Docker 24 以上版本和 Docker Compose v2（`docker compose version` 能输出版本号）。
+- 在服务器防火墙或云厂商安全组中放行端口：
+  - `7000/tcp`：客户端连接。
+  - 客户端映射的端口范围，默认 `6000-6100`，TCP 和 UDP 都要放行。
+  - 控制台：经反向代理时放行 `443/tcp`，直接访问时放行 `7500/tcp`。
+- 如果要用 SSO 登录控制台，先在 OIDC 服务端（例如群晖 SSO）登记一个应用，记下 client ID、client secret，回调地址填 `https://<控制台域名>/relay`（路径可以自定）。
+
+### 1. 获取部署文件
+
+只需要仓库里的 `deploy/docker` 目录：
+
+```bash
+git clone --depth 1 https://github.com/czwstc/frp-enterprise.git
+cd frp-enterprise/deploy/docker
+cp .env.example .env
+```
+
+### 2. 填写 `.env`
+
+| 变量 | 说明 |
+|---|---|
+| `FRPS_IMAGE` | 镜像，默认 `ghcr.io/czwstc/frps-enterprise:edge`（`dev` 分支的最新构建）；推送 `vX.Y.Z` 标签后也可以用 `:latest` 或固定版本 `:X.Y.Z` |
+| `FRPS_TOKEN` | 客户端连接用的 TOKEN，建议用 `openssl rand -hex 24` 生成 |
+| `FRPS_ADMIN_USER` / `FRPS_ADMIN_PASSWORD` | 控制台本地账号，密码至少 8 位 |
+| `FRPS_OIDC_ISSUER` | OIDC 地址，例如 `https://nas.example.com:5001/webman/sso`；不用 SSO 时留空 |
+| `FRPS_OIDC_CLIENT_ID` / `FRPS_OIDC_CLIENT_SECRET` | OIDC 应用的 ID 和密钥 |
+| `FRPS_OIDC_REDIRECT_URL` | 回调地址，必须和 OIDC 服务端登记的完全一致 |
+| `FRPS_OIDC_NAME` | 登录页 SSO 按钮上显示的名称 |
+
+`.env` 中有密钥，请设置 `chmod 600 .env`，并且不要提交到 Git。任何一个被引用的变量没有设置时，frps 会拒绝启动并说明缺少哪一项。
+
+### 3. 拉取镜像
+
+镜像由 GitHub Actions 推送到 GHCR。GHCR 的包默认是私有的，二选一：
+
+- 在仓库的 Packages 设置中把 `frps-enterprise` 改为公开。
+- 或者在服务器上登录 GHCR：先创建一个只有 `read:packages` 权限的 Personal Access Token，再执行：
+
+  ```bash
+  echo <token> | docker login ghcr.io -u <GitHub 用户名> --password-stdin
+  ```
+
+### 4. 启动并检查
+
+```bash
+docker compose up -d
+docker compose ps                         # 状态应为 running
+docker compose logs -f frps               # 查看启动日志
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:7500/healthz   # 返回 200
+```
+
+然后打开控制台，按[首次登录控制台](#2-首次登录控制台)设置动态验证码，并保存恢复密钥。
+
+### 5. 用 HTTPS 访问控制台（推荐）
+
+生产环境建议只让反向代理访问控制台。先把 `docker-compose.yml` 中的 `"7500:7500"` 改为 `"127.0.0.1:7500:7500"`，再配置反向代理。frps 会根据 `X-Forwarded-Proto` 给登录 cookie 加上 `Secure`。
+
+Caddy（自动申请证书）：
+
+```text
+frp.example.com {
+    reverse_proxy 127.0.0.1:7500
+}
+```
+
+Nginx：
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name frp.example.com;
+    ssl_certificate     /etc/ssl/frp.example.com.crt;
+    ssl_certificate_key /etc/ssl/frp.example.com.key;
+
+    location / {
+        proxy_pass http://127.0.0.1:7500;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+改用 HTTPS 后，同步修改 `.env` 中的 `FRPS_OIDC_REDIRECT_URL` 和 OIDC 服务端登记的回调地址，再执行 `docker compose up -d`。
+
+### 6. 修改配置或端口范围
+
+镜像内置的配置是 [deploy/docker/frps.toml](deploy/docker/frps.toml)。要修改时：
+
+1. 把它复制到 `docker-compose.yml` 旁边并修改，例如把 `allowPorts` 改为 `[{ start = 20000, end = 20100 }]`。
+2. 在 `docker-compose.yml` 中取消注释这一行：`- ./frps.toml:/etc/frp/frps.toml:ro`。
+3. 把 `ports` 里的映射范围改成同样的范围（TCP 和 UDP 各一行）。
+4. 执行 `docker compose up -d`。
+
+### 7. 升级
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+数据都在 `frps-data` 卷中，升级不会丢失。会话保存在内存里，升级后管理员需要重新登录，客户端会自动重连。
+
+### 8. 备份与迁移
+
+所有数据都在容器的 `/data` 目录：
+
+- `frps_enterprise.json`：鉴权码和通知。
+- `frps_admin.json`：用户、本地账号的二次验证信息。
+- `frps_audit.log`：审计日志。
+- `frps_branding.json`：外观设置。
+
+```bash
+docker compose cp frps:/data ./frps-backup-$(date +%F)    # 备份
+docker compose cp ./frps-backup-2026-11-07/. frps:/data   # 在新服务器上恢复，然后重启
+docker compose restart frps
+```
+
+迁移到新服务器时，连同 `.env` 一起复制；客户端只要改连接地址（或保持域名不变）即可，鉴权码和设备绑定都保留。
+
+### 9. 自行构建镜像
+
+```bash
+docker build -f dockerfiles/Dockerfile-enterprise-frps -t frps-enterprise:local .
+```
+
+然后把 `.env` 中的 `FRPS_IMAGE` 改为 `frps-enterprise:local`。
+
+### 常见问题
+
+| 现象 | 处理 |
+|---|---|
+| 启动后立即退出，日志提示 `comes from an environment variable that is not set` | `.env` 中缺少对应变量，补上后重新启动 |
+| 拉取镜像提示 `denied` 或 `unauthorized` | GHCR 包是私有的，见[第 3 步](#3-拉取镜像) |
+| SSO 登录后提示回调地址不匹配 | `FRPS_OIDC_REDIRECT_URL` 与 OIDC 服务端登记的地址不一致，注意 http 和 https、端口、路径都要相同 |
+| 动态验证码总是错误 | 检查服务器和手机的时间，误差需要在 30 秒以内（服务器可启用 NTP） |
+| 客户端已运行，但映射的端口从外部访问不到 | 检查云安全组或防火墙是否放行该端口，以及端口是否在 `allowPorts` 和 compose 的 `ports` 范围内 |
+| 本地账号的手机丢了，恢复密钥也用完了 | 让通过 SSO 登录的管理员在“用户”页重置二次验证；没有 SSO 管理员时，停止容器，删除 `/data/frps_admin.json` 中 `local` 部分后重启（SSO 用户也会一并清除，请先备份） |
+
 ## 客户端
+
+### 下载
+
+在 [Releases](https://github.com/czwstc/frp-enterprise/releases) 下载 HDIT-FRPE-Client：
+
+| 系统 | 文件 |
+|---|---|
+| macOS（Apple 芯片和 Intel） | `hdit-frpe-client-<版本>-universal.dmg` |
+| Windows x64 | `HDIT-FRPE-Client-<版本>-windows-amd64.zip`（解压后直接运行 `HDIT-FRPE-Client.exe`，无需安装其他组件） |
+| Linux x64 / ARM64 | `.deb` 安装包，或 `.tar.gz`（解压后运行 `install.sh`） |
+
+安装包目前没有代码签名：macOS 首次打开时请右键选择“打开”，Windows 可能出现 SmartScreen 提示，选择“仍要运行”即可。
 
 ### 登录状态
 
