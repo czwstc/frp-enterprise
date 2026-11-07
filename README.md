@@ -173,6 +173,8 @@ remotePort = 6001
 
 ### 1. 获取部署文件
 
+有两种方式：直接用仓库里的 `deploy/docker` 目录（下面的命令），或者按 [1b](#1b-不克隆仓库自己创建部署目录) 自己创建 `docker-compose.yml`。
+
 只需要仓库里的 `deploy/docker` 目录：
 
 ```bash
@@ -180,6 +182,116 @@ git clone --depth 1 https://github.com/czwstc/frp-enterprise.git
 cd frp-enterprise/deploy/docker
 cp .env.example .env
 ```
+
+### 1b. 不克隆仓库，自己创建部署目录
+
+也可以不下载仓库，直接在服务器上手写三个文件。下面以 `/opt/frps` 为例，配置和数据都放在宿主机目录里，方便查看和备份：
+
+```text
+/opt/frps/
+├── docker-compose.yml   # 容器定义
+├── .env                 # 密钥和账号（chmod 600）
+├── config/
+│   └── frps.toml        # frps 配置，只读挂载到 /etc/frp/frps.toml
+└── data/                # 鉴权码、用户、审计日志、外观设置，挂载到 /data
+```
+
+**第 1 步：创建目录。** 镜像以非 root 用户运行，`data` 目录必须让容器里的用户可写。下面的 compose 用 `user: "1000:1000"` 指定运行用户，所以把目录交给 1000：
+
+```bash
+sudo mkdir -p /opt/frps/config /opt/frps/data
+sudo chown -R 1000:1000 /opt/frps/data
+cd /opt/frps
+```
+
+**第 2 步：`docker-compose.yml`。**
+
+```yaml
+services:
+  frps:
+    image: ghcr.io/czwstc/frps-enterprise:1.0.0   # 固定版本；也可用 :latest 或 :edge
+    container_name: frps
+    restart: unless-stopped
+    user: "1000:1000"            # 与 data 目录的属主一致
+    env_file: .env               # frps.toml 中 {{ .Envs.X }} 的值来自这里
+    environment:
+      TZ: Asia/Shanghai          # 日志和审计时间使用的时区
+    ports:
+      - "7000:7000"              # 客户端连接（bindPort）
+      - "7500:7500"              # 控制台；用反向代理时改为 "127.0.0.1:7500:7500"
+      - "6000-6100:6000-6100"    # 客户端可映射的端口，与 allowPorts 一致
+      - "6000-6100:6000-6100/udp"
+    volumes:
+      - ./config/frps.toml:/etc/frp/frps.toml:ro   # 配置文件（只读）
+      - ./data:/data                               # 数据目录（必须可写）
+      # OIDC 使用自签名证书时，再挂载 CA，并在 frps.toml 中设置 trustedCaFile：
+      # - ./config/ca.pem:/etc/frp/ca.pem:ro
+```
+
+挂载说明：
+
+| 容器路径 | 宿主机路径 | 权限 | 用途 |
+|---|---|---|---|
+| `/etc/frp/frps.toml` | `./config/frps.toml` | 只读 | frps 配置；不挂载时使用镜像内置的默认配置 |
+| `/data` | `./data` | 读写 | 所有持久数据，见[数据文件](#数据文件)；不挂载时数据会随容器删除 |
+
+如果更喜欢 Docker 命名卷（不关心数据放在哪个目录），把 `./data:/data` 换成 `frps-data:/data`，在文件末尾加上 `volumes: { frps-data: {} }`，并去掉 `user` 一行即可，不需要 `chown`。
+
+**第 3 步：`config/frps.toml`。** 内容与仓库里的 [deploy/docker/frps.toml](deploy/docker/frps.toml) 相同，可以直接下载：
+
+```bash
+curl -fsSL -o config/frps.toml \
+  https://raw.githubusercontent.com/czwstc/frp-enterprise/v1.0.0/deploy/docker/frps.toml
+```
+
+关键配置如下，数据文件路径都要指向 `/data`：
+
+```toml
+bindPort = 7000
+auth.token = "{{ .Envs.FRPS_TOKEN }}"
+allowPorts = [{ start = 6000, end = 6100 }]   # 与 compose 的 ports 保持一致
+
+webServer.addr = "0.0.0.0"
+webServer.port = 7500
+
+enterprise.enabled = true
+enterprise.storePath = "/data/frps_enterprise.json"
+enterprise.brandingPath = "/data/frps_branding.json"
+
+enterprise.admin.enabled = true
+enterprise.admin.storePath = "/data/frps_admin.json"
+enterprise.admin.auditLogPath = "/data/frps_audit.log"
+enterprise.admin.localUser.username = "{{ .Envs.FRPS_ADMIN_USER }}"
+enterprise.admin.localUser.password = "{{ .Envs.FRPS_ADMIN_PASSWORD }}"
+
+# 不用 SSO 时删除下面整段
+enterprise.admin.oidc.issuer = "{{ .Envs.FRPS_OIDC_ISSUER }}"
+enterprise.admin.oidc.clientID = "{{ .Envs.FRPS_OIDC_CLIENT_ID }}"
+enterprise.admin.oidc.clientSecret = "{{ .Envs.FRPS_OIDC_CLIENT_SECRET }}"
+enterprise.admin.oidc.redirectURL = "{{ .Envs.FRPS_OIDC_REDIRECT_URL }}"
+enterprise.admin.oidc.scopes = ["openid", "email", "groups"]
+enterprise.admin.oidc.displayName = "{{ .Envs.FRPS_OIDC_NAME }}"
+```
+
+`{{ .Envs.X }}` 会在启动时替换成 `.env` 里的值，这样密钥不必写进配置文件。也可以直接写明文，但那样 `frps.toml` 也要按密钥对待。
+
+**第 4 步：`.env`。**
+
+```bash
+cat > .env <<'ENV'
+FRPS_TOKEN=请替换为随机字符串
+FRPS_ADMIN_USER=admin
+FRPS_ADMIN_PASSWORD=请替换为至少8位的密码
+FRPS_OIDC_ISSUER=https://nas.example.com:5001/webman/sso
+FRPS_OIDC_CLIENT_ID=
+FRPS_OIDC_CLIENT_SECRET=
+FRPS_OIDC_REDIRECT_URL=https://frp.example.com/relay
+FRPS_OIDC_NAME=群晖 SSO
+ENV
+chmod 600 .env
+```
+
+各变量的含义见下一节。准备好后，从[第 3 步](#3-拉取镜像)继续。使用宿主机目录时，备份只需要复制 `/opt/frps` 整个目录（先 `docker compose stop`）。
 
 ### 2. 填写 `.env`
 
@@ -265,7 +377,7 @@ docker compose pull
 docker compose up -d
 ```
 
-数据都在 `frps-data` 卷中，升级不会丢失。会话保存在内存里，升级后管理员需要重新登录，客户端会自动重连。
+数据都在 `frps-data` 卷（或 1b 中的 `./data` 目录）中，升级不会丢失。会话保存在内存里，升级后管理员需要重新登录，客户端会自动重连。
 
 ### 8. 备份与迁移
 

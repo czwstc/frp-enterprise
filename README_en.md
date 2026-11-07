@@ -61,7 +61,7 @@ docker compose up -d
    enterprise.authCode = "XXXX-XXXX-XXXX-XXXX"
    ```
 
-The Chinese [README](README.md#docker-部署指南) has the full Docker deployment guide: preparation, `.env`, pulling from GHCR, HTTPS reverse proxy (Caddy and Nginx), changing the port range, upgrades, backups and troubleshooting. See also [deploy/docker/README.md](deploy/docker/README.md) and [conf/frps_full_example.toml](conf/frps_full_example.toml) for every option.
+The Chinese [README](README.md#docker-部署指南) has the full Docker deployment guide: preparation, writing `docker-compose.yml` by hand with host directories mounted for the config (`/etc/frp/frps.toml`, read-only) and data (`/data`, writable by UID 1000), `.env`, pulling from GHCR, HTTPS reverse proxy (Caddy and Nginx), changing the port range, upgrades, backups and troubleshooting. See also [deploy/docker/README.md](deploy/docker/README.md) and [conf/frps_full_example.toml](conf/frps_full_example.toml) for every option.
 
 ## Desktop client downloads
 
