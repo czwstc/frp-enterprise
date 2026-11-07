@@ -24,19 +24,19 @@ import (
 	"github.com/fatedier/golib/log"
 )
 
-// LogLine is one line of the log.
-type LogLine struct {
+// Line is one line of the log.
+type Line struct {
 	Seq   uint64
 	Time  time.Time
 	Level string // "trace", "debug", "info", "warn" or "error"
 	Text  string
 }
 
-// LogBuffer keeps the latest log lines in memory. It is an io.Writer and a
+// Buffer keeps the latest log lines in memory. It is an io.Writer and a
 // LevelWriter, so it can be given to InitLoggerWithWriter.
-type LogBuffer struct {
+type Buffer struct {
 	mu    sync.Mutex
-	lines []LogLine
+	lines []Line
 	start int
 	size  int
 	seq   uint64
@@ -44,22 +44,22 @@ type LogBuffer struct {
 	mirror io.Writer
 }
 
-// NewLogBuffer creates a buffer that keeps up to capacity lines.
-func NewLogBuffer(capacity int, mirror io.Writer) *LogBuffer {
+// NewBuffer creates a buffer that keeps up to capacity lines.
+func NewBuffer(capacity int, mirror io.Writer) *Buffer {
 	if capacity <= 0 {
 		capacity = 2000
 	}
-	return &LogBuffer{lines: make([]LogLine, capacity), mirror: mirror}
+	return &Buffer{lines: make([]Line, capacity), mirror: mirror}
 }
 
 // Write implements io.Writer, for lines without a known level.
-func (b *LogBuffer) Write(p []byte) (int, error) {
+func (b *Buffer) Write(p []byte) (int, error) {
 	b.add(p, "", time.Now())
 	return len(p), nil
 }
 
 // WriteLog implements LevelWriter.
-func (b *LogBuffer) WriteLog(p []byte, level log.Level, when time.Time) (int, error) {
+func (b *Buffer) WriteLog(p []byte, level log.Level, when time.Time) (int, error) {
 	b.add(p, levelName(level), when)
 	return len(p), nil
 }
@@ -91,11 +91,11 @@ func trimHeader(s string) string {
 	return s
 }
 
-func (b *LogBuffer) add(p []byte, level string, when time.Time) {
+func (b *Buffer) add(p []byte, level string, when time.Time) {
 	if b.mirror != nil {
 		_, _ = b.mirror.Write(p)
 	}
-	for _, raw := range bytes.Split(bytes.TrimRight(p, "\n"), []byte("\n")) {
+	for raw := range bytes.SplitSeq(bytes.TrimRight(p, "\n"), []byte("\n")) {
 		text := trimHeader(strings.TrimRight(string(raw), "\r"))
 		lvl := level
 		if lvl == "" {
@@ -103,7 +103,7 @@ func (b *LogBuffer) add(p []byte, level string, when time.Time) {
 		}
 		b.mu.Lock()
 		b.seq++
-		line := LogLine{Seq: b.seq, Time: when, Level: lvl, Text: text}
+		line := Line{Seq: b.seq, Time: when, Level: lvl, Text: text}
 		capacity := len(b.lines)
 		if b.size < capacity {
 			b.lines[(b.start+b.size)%capacity] = line
@@ -117,10 +117,10 @@ func (b *LogBuffer) add(p []byte, level string, when time.Time) {
 }
 
 // Lines returns the buffered lines, oldest first.
-func (b *LogBuffer) Lines() []LogLine {
+func (b *Buffer) Lines() []Line {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	out := make([]LogLine, b.size)
+	out := make([]Line, b.size)
 	for i := range b.size {
 		out[i] = b.lines[(b.start+i)%len(b.lines)]
 	}
@@ -128,14 +128,14 @@ func (b *LogBuffer) Lines() []LogLine {
 }
 
 // LastSeq returns the sequence number of the latest line, 0 when empty.
-func (b *LogBuffer) LastSeq() uint64 {
+func (b *Buffer) LastSeq() uint64 {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.seq
 }
 
 // Clear removes all lines.
-func (b *LogBuffer) Clear() {
+func (b *Buffer) Clear() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.start, b.size = 0, 0

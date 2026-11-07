@@ -25,8 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/samber/lo"
-
 	"github.com/fatedier/frp/client"
 	"github.com/fatedier/frp/pkg/config"
 	"github.com/fatedier/frp/pkg/config/source"
@@ -235,7 +233,7 @@ func (m *Manager) buildCommon(st Settings) *v1.ClientCommonConfig {
 		ClientID:      st.DeviceID,
 		ServerAddr:    st.ServerAddr,
 		ServerPort:    st.ServerPort,
-		LoginFailExit: lo.ToPtr(false),
+		LoginFailExit: new(false),
 		Enterprise:    v1.ClientEnterpriseConfig{AuthCode: st.AuthCode},
 	}
 }

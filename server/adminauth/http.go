@@ -91,7 +91,9 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 }
 
 func (s *Service) setSessionCookie(w http.ResponseWriter, r *http.Request, sess *Session) {
-	http.SetCookie(w, &http.Cookie{
+	// Secure follows the request scheme, so dashboards served over plain
+	// HTTP inside a company network keep working; behind HTTPS it is set.
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // see above
 		Name:     sessionCookie,
 		Value:    sess.Token,
 		Path:     "/",
@@ -103,7 +105,9 @@ func (s *Service) setSessionCookie(w http.ResponseWriter, r *http.Request, sess 
 }
 
 func clearCookie(w http.ResponseWriter, r *http.Request, name string) {
-	http.SetCookie(w, &http.Cookie{
+	// Secure follows the request scheme, so dashboards served over plain
+	// HTTP inside a company network keep working; behind HTTPS it is set.
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // see above
 		Name: name, Value: "", Path: "/", MaxAge: -1,
 		HttpOnly: true, Secure: secureRequest(r), SameSite: http.SameSiteLaxMode,
 	})
@@ -255,7 +259,9 @@ func (s *Service) handleOIDCLogin(w http.ResponseWriter, r *http.Request) {
 		redirectLogin(w, r, "error", "无法连接 SSO 服务："+err.Error())
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
+	// Secure follows the request scheme, so dashboards served over plain
+	// HTTP inside a company network keep working; behind HTTPS it is set.
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // see above
 		Name: stateCookie, Value: state, Path: "/", MaxAge: int(oidcFlowTTL.Seconds()),
 		HttpOnly: true, Secure: secureRequest(r), SameSite: http.SameSiteLaxMode,
 	})

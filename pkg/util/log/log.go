@@ -42,17 +42,17 @@ func init() {
 }
 
 // memory, when set, receives a copy of every log line, for the dashboard.
-var memory *LogBuffer
+var memory *Buffer
 
 // EnableMemory keeps the latest capacity log lines in memory from the next
 // InitLogger on, and returns the buffer.
-func EnableMemory(capacity int) *LogBuffer {
-	memory = NewLogBuffer(capacity, nil)
+func EnableMemory(capacity int) *Buffer {
+	memory = NewBuffer(capacity, nil)
 	return memory
 }
 
 // Memory returns the in-memory log buffer, or nil when it is not enabled.
-func Memory() *LogBuffer { return memory }
+func Memory() *Buffer { return memory }
 
 func InitLogger(logPath string, levelStr string, maxDays int, disableLogColor bool) {
 	var out io.Writer = log.DefaultWriter

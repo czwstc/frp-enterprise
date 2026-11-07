@@ -154,8 +154,7 @@ func (l *Logger) List(q Query) Page {
 	l.mu.Unlock()
 	needle := strings.ToLower(strings.TrimSpace(q.Q))
 	matched := make([]Entry, 0, len(all))
-	for i := len(all) - 1; i >= 0; i-- {
-		e := all[i]
+	for _, e := range slices.Backward(all) {
 		if q.Action != "" && !strings.HasPrefix(e.Action, q.Action) {
 			continue
 		}
