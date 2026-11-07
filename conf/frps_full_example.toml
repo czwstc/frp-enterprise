@@ -175,6 +175,9 @@ natholeAnalysisDataReserveHours = 168
 # revoked in the dashboard (webServer) or with the /api/enterprise/* APIs.
 # enterprise.enabled = true
 # enterprise.storePath = "./frps_enterprise.json"
+# The dashboard's and the desktop clients' look (name, logo, theme, accent,
+# top right link), edited on the dashboard's settings page.
+# enterprise.brandingPath = "./frps_branding.json"
 
 # Dashboard accounts replace webServer.user/password: one local user who sets up
 # TOTP (and gets recovery keys) at the first login after deployment, and OIDC

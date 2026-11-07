@@ -11,11 +11,14 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    BrandMark: typeof import('./src/components/pulse/BrandMark.vue')['default']
     ClientCard: typeof import('./src/components/ClientCard.vue')['default']
+    DotSpark: typeof import('./src/components/pulse/DotSpark.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCard: typeof import('element-plus/es')['ElCard']
     ElCol: typeof import('element-plus/es')['ElCol']
+    ElColorPicker: typeof import('element-plus/es')['ElColorPicker']
     ElDialog: typeof import('element-plus/es')['ElDialog']
     ElDivider: typeof import('element-plus/es')['ElDivider']
     ElDropdown: typeof import('element-plus/es')['ElDropdown']
@@ -39,10 +42,13 @@ declare module 'vue' {
     ElTabs: typeof import('element-plus/es')['ElTabs']
     ElTag: typeof import('element-plus/es')['ElTag']
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
+    MetricCard: typeof import('./src/components/pulse/MetricCard.vue')['default']
     ProxyCard: typeof import('./src/components/ProxyCard.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SideIcon: typeof import('./src/components/pulse/SideIcon.vue')['default']
     StatCard: typeof import('./src/components/StatCard.vue')['default']
+    TopLink: typeof import('./src/components/pulse/TopLink.vue')['default']
     Traffic: typeof import('./src/components/Traffic.vue')['default']
   }
   export interface GlobalDirectives {

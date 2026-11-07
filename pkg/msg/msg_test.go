@@ -43,7 +43,7 @@ func TestV1MessageTypeIDsAreStable(t *testing.T) {
 }
 
 func TestMessageTypeMapIsCompleteAndUnique(t *testing.T) {
-	require.Len(t, msgTypeMap, 20)
+	require.Len(t, msgTypeMap, 21)
 
 	msgTypes := make(map[reflect.Type]struct{}, len(msgTypeMap))
 

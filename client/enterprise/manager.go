@@ -87,6 +87,7 @@ type Status struct {
 	Ports       []msg.EntPort
 	Proxies     []ProxyStatus
 	Notices     []msg.EntNotice
+	Branding    Branding
 }
 
 // Manager runs the embedded frpc service and keeps its state.
@@ -424,6 +425,25 @@ func (e *serviceEvents) OnEntSnapshot(snap *msg.EntSnapshot) {
 	m.changed()
 }
 
+func (e *serviceEvents) OnEntBranding(b *msg.EntBranding) {
+	m := e.m
+	m.mu.Lock()
+	if m.gen != e.gen || m.settings.Branding.Version == b.Version && m.settings.Branding.SiteName == b.SiteName &&
+		m.settings.Branding.Accent == b.Accent && m.settings.Branding.Logo == b.Logo {
+		m.mu.Unlock()
+		return
+	}
+	err := m.updateSettingsLocked(func(s *Settings) error {
+		s.Branding = Branding{Version: b.Version, SiteName: b.SiteName, Accent: b.Accent, Logo: b.Logo}
+		return nil
+	})
+	m.mu.Unlock()
+	if err != nil {
+		log.Warnf("save branding: %v", err)
+	}
+	m.changed()
+}
+
 func (e *serviceEvents) OnEntNotice(n *msg.EntNotice) {
 	m := e.m
 	m.mu.Lock()
@@ -457,6 +477,7 @@ func (m *Manager) Status() Status {
 		AuthCode:    m.settings.AuthCode,
 		ConnectedAt: m.connectedAt,
 		Notices:     slices.Clone(m.notices),
+		Branding:    m.settings.Branding,
 	}
 	if m.snapshot != nil {
 		st.PublicIP = m.snapshot.ClientIP

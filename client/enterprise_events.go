@@ -33,6 +33,8 @@ type EventHandler interface {
 	OnEntSnapshot(snapshot *msg.EntSnapshot)
 	// OnEntNotice is called once for every new notice from the server.
 	OnEntNotice(notice *msg.EntNotice)
+	// OnEntBranding is called when the server sends its look.
+	OnEntBranding(branding *msg.EntBranding)
 }
 
 const maxEntNotices = 100
@@ -72,6 +74,14 @@ func (s *entState) handleSnapshot(m msg.Message) {
 	if s.handler != nil {
 		s.handler.OnEntSnapshot(snap)
 	}
+}
+
+func (s *entState) handleBranding(m msg.Message) {
+	b, ok := m.(*msg.EntBranding)
+	if !ok || s.handler == nil {
+		return
+	}
+	s.handler.OnEntBranding(b)
 }
 
 func (s *entState) handleNotice(m msg.Message) {

@@ -30,6 +30,7 @@ docker compose logs -f frps
 - `frps_enterprise.json`：鉴权码和通知。
 - `frps_admin.json`：用户和本地账号的二次验证信息。
 - `frps_audit.log`：审计日志。
+- `frps_branding.json`：控制台“设置”页保存的名称、图标、主题和右上角链接。
 
 如果 `.env` 里漏填了密码或 client secret，frps 会拒绝启动并报出缺少的变量。
 

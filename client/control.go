@@ -239,6 +239,7 @@ func (ctl *Control) registerMsgHandlers() {
 	if ent := ctl.sessionCtx.Ent; ent != nil {
 		ctl.msgDispatcher.RegisterHandler(&msg.EntSnapshot{}, ent.handleSnapshot)
 		ctl.msgDispatcher.RegisterHandler(&msg.EntNotice{}, ent.handleNotice)
+		ctl.msgDispatcher.RegisterHandler(&msg.EntBranding{}, ent.handleBranding)
 	}
 }
 

@@ -289,3 +289,41 @@ func countNotices(s *fakeSession) int {
 	}
 	return n
 }
+
+func TestBrandingOnlyReachesV2Clients(t *testing.T) {
+	version := int64(1)
+	h, err := NewHub(Options{Branding: func() *msg.EntBranding {
+		return &msg.EntBranding{Version: version, SiteName: "HDIT FRPE", Accent: "#1f5eff"}
+	}})
+	require.NoError(t, err)
+	t.Cleanup(h.Close)
+
+	v1 := newFakeSession("run1", "dev1", "AAAA-BBBB")
+	v2 := newFakeSession("run2", "dev2", "CCCC-DDDD")
+	v2.login.Metas[msg.EntMetaCaps] = msg.EntCapsV2
+	h.OnControlActive(v1)
+	h.OnControlActive(v2)
+
+	count := func(s *fakeSession) (n int, last *msg.EntBranding) {
+		for _, m := range s.messages() {
+			if b, ok := m.(*msg.EntBranding); ok {
+				n++
+				last = b
+			}
+		}
+		return n, last
+	}
+	n, _ := count(v1)
+	require.Equal(t, 0, n, "v1 clients never get branding")
+	n, last := count(v2)
+	require.Equal(t, 1, n)
+	require.Equal(t, "HDIT FRPE", last.SiteName)
+
+	version = 2
+	h.BroadcastBranding()
+	n, last = count(v2)
+	require.Equal(t, 2, n)
+	require.Equal(t, int64(2), last.Version)
+	n, _ = count(v1)
+	require.Equal(t, 0, n)
+}

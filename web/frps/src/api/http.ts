@@ -132,6 +132,13 @@ export const http = {
     }),
   delete: <T>(url: string, options?: RequestInit) =>
     request<T>(url, { ...options, method: 'DELETE' }),
+  putV2: <T>(url: string, body?: any, options?: RequestInit) =>
+    requestV2<T>(url, {
+      ...options,
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(body),
+    }),
   deleteV2: <T>(url: string, options?: RequestInit) =>
     requestV2<T>(url, { ...options, method: 'DELETE' }),
 }

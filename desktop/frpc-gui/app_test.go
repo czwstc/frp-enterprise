@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"strings"
 	"testing"
 	"time"
@@ -150,7 +154,7 @@ func TestLoginView(t *testing.T) {
 	f := newFake()
 	a := newApp(f)
 	tt := ui.NewTester(a.view, 920, 640)
-	if !tt.HasText("FRP 企业客户端") || !tt.HasText("鉴权码") {
+	if !tt.HasText(AppName) || !tt.HasText("鉴权码") {
 		t.Fatalf("login page texts %q", tt.Texts())
 	}
 
@@ -283,7 +287,7 @@ func TestPortsNoticesLogsTabs(t *testing.T) {
 		t.Errorf("ports tab texts %q", tt.Texts())
 	}
 
-	must(t, tt.Click("通知 (1)"))
+	must(t, tt.Click("通知"))
 	if !tt.HasText("维护通知") || !tt.HasText("今晚 22 点维护") {
 		t.Errorf("notices tab texts %q", tt.Texts())
 	}
@@ -337,5 +341,42 @@ func TestLogoutReturnsToLogin(t *testing.T) {
 	}
 	if a.loginAddr != "frp.example.com:7000" || a.loginCode != "ABCD-EFGH-JKLM-NPQR" {
 		t.Errorf("login form not prefilled: %q %q", a.loginAddr, a.loginCode)
+	}
+}
+
+func TestBrandingFromServer(t *testing.T) {
+	f := connectedFake()
+	f.status.Branding = enterprise.Branding{Version: 3, SiteName: "汇鼎内网穿透", Accent: "#0e8f96"}
+	a := newApp(f)
+	tt := ui.NewTester(a.view, 920, 640)
+	if !tt.HasText("汇鼎内网穿透") || !tt.HasText(AppName) {
+		t.Errorf("sidebar does not show the server's name, texts %q", tt.Texts())
+	}
+	if !tt.HasText("汇鼎科技") {
+		t.Errorf("placeholder mark missing without a logo, texts %q", tt.Texts())
+	}
+
+	// A PNG logo replaces the placeholder mark.
+	img := image.NewRGBA(image.Rect(0, 0, 4, 2))
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	f.status.Branding.Logo = "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+	a.refresh()
+	tt.Frame()
+	if a.logo.img == nil {
+		t.Fatal("logo not decoded")
+	}
+	if tt.HasText("汇鼎科技") {
+		t.Errorf("placeholder still shown with a logo, texts %q", tt.Texts())
+	}
+
+	// A broken logo falls back to the placeholder.
+	f.status.Branding.Logo = "data:image/png;base64,@@@"
+	a.refresh()
+	tt.Frame()
+	if a.logo.img != nil || !tt.HasText("汇鼎科技") {
+		t.Errorf("broken logo not ignored")
 	}
 }

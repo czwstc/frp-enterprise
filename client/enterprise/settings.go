@@ -64,6 +64,17 @@ type Settings struct {
 	AutoConnect bool           `json:"autoConnect"`
 	Proxies     []ProxySetting `json:"proxies"`
 	Lock        LockSetting    `json:"lock"`
+	// Branding is the look last received from the server.
+	Branding Branding `json:"branding,omitzero"`
+}
+
+// Branding is the look the server's administrator chose.
+type Branding struct {
+	Version  int64  `json:"version"`
+	SiteName string `json:"siteName,omitempty"`
+	Accent   string `json:"accent,omitempty"`
+	// Logo is a data URL, or empty for the built-in mark.
+	Logo string `json:"logo,omitempty"`
 }
 
 // Clone returns a deep copy.

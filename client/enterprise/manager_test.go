@@ -51,11 +51,15 @@ func startServer(t *testing.T) *testServer {
 	t.Helper()
 	ts := &testServer{bindPort: freePort(t), webPort: freePort(t)}
 	cfg := &v1.ServerConfig{
-		BindAddr:   "127.0.0.1",
-		BindPort:   ts.bindPort,
-		Auth:       v1.AuthServerConfig{Method: v1.AuthMethodToken, Token: "s3cret"},
-		WebServer:  v1.WebServerConfig{Addr: "127.0.0.1", Port: ts.webPort, User: "admin", Password: "admin"},
-		Enterprise: v1.ServerEnterpriseConfig{Enabled: true, StorePath: filepath.Join(t.TempDir(), "ent.json")},
+		BindAddr:  "127.0.0.1",
+		BindPort:  ts.bindPort,
+		Auth:      v1.AuthServerConfig{Method: v1.AuthMethodToken, Token: "s3cret"},
+		WebServer: v1.WebServerConfig{Addr: "127.0.0.1", Port: ts.webPort, User: "admin", Password: "admin"},
+		Enterprise: v1.ServerEnterpriseConfig{
+			Enabled:      true,
+			StorePath:    filepath.Join(t.TempDir(), "ent.json"),
+			BrandingPath: filepath.Join(t.TempDir(), "branding.json"),
+		},
 	}
 	require.NoError(t, cfg.Complete())
 	svr, err := server.NewService(cfg)
@@ -204,6 +208,20 @@ func TestManagerEndToEnd(t *testing.T) {
 		return len(a.Status().Notices) == 1 && len(b.Status().Notices) == 1
 	}, 5*time.Second, 50*time.Millisecond)
 	require.Equal(t, "维护通知", a.Status().Notices[0].Title)
+
+	// The server's branding reaches the clients, and so do changes to it.
+	require.Eventually(t, func() bool { return b.Status().Branding.SiteName == "HDIT FRPE" }, 5*time.Second, 50*time.Millisecond)
+	var brand map[string]any
+	require.NoError(t, json.Unmarshal(ts.api(t, "GET", "/api/branding", nil), &brand))
+	brand["siteName"] = "汇鼎内网穿透"
+	brand["accent"] = "#0e8f96"
+	ts.api(t, "PUT", "/api/branding", brand)
+	require.Eventually(t, func() bool {
+		br := b.Status().Branding
+		return br.SiteName == "汇鼎内网穿透" && br.Accent == "#0e8f96"
+	}, 5*time.Second, 50*time.Millisecond)
+	// It is kept in the encrypted settings for the next start.
+	require.Equal(t, "汇鼎内网穿透", b.Settings().Branding.SiteName)
 
 	// A third device cannot reuse A's code.
 	c := newTestManager(t, "machine-c")

@@ -134,7 +134,7 @@ func (d *controlSessionDialer) buildLoginMsg(previousRunID string) (*msg.Login, 
 func buildLoginMetas(common *v1.ClientCommonConfig) map[string]string {
 	metas := make(map[string]string, len(common.Metadatas)+2)
 	maps.Copy(metas, common.Metadatas)
-	metas[msg.EntMetaCaps] = msg.EntCapsV1
+	metas[msg.EntMetaCaps] = msg.EntCapsV2
 	if code := strings.TrimSpace(common.Enterprise.AuthCode); code != "" {
 		metas[msg.EntMetaAuthCode] = code
 	}
